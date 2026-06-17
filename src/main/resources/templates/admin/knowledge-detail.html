@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文档详情 - CodeGuardian AI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+    <style>
+        .detail-card {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            padding: 30px;
+            border: 1px solid var(--border-color);
+        }
+        .detail-header {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+        }
+        .detail-title {
+            font-size: 24px;
+            color: var(--text-color);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .detail-meta {
+            display: flex;
+            gap: 20px;
+            color: var(--text-secondary-color);
+            font-size: 14px;
+        }
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .detail-content {
+            color: var(--text-color);
+            line-height: 1.8;
+            font-size: 16px;
+            white-space: pre-wrap;
+            background-color: var(--bg-color);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            color: var(--text-secondary-color);
+            text-decoration: none;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .back-btn:hover {
+            color: var(--primary-color);
+        }
+        .action-bar {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .download-btn {
+            background-color: var(--secondary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .download-btn:hover {
+            opacity: 0.9;
+        }
+        /* Fix scrolling for detail page */
+        .content-area {
+            overflow-y: auto !important;
+            padding-bottom: 60px !important;
+            display: block !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <!-- 左侧导航栏 -->
+        <aside class="sidebar">
+            <div class="logo"><i class="fas fa-shield-alt"></i></div>
+            <ul class="sidebar-menu">
+                <li><a href="/dashboard" title="仪表盘"><i class="fas fa-chart-pie"></i></a></li>
+                <li th:if="${canReview or canQuery}"><a href="/review" title="搜索"><i class="fas fa-search"></i></a></li>
+                <li th:if="${canQuery}"><a href="/review/reports" title="任务列表"><i class="fas fa-file-lines"></i></a></li>
+                <li th:if="${canAdmin}"><a href="/admin/users" title="权限管理"><i class="fas fa-user-shield"></i></a></li>
+                <li th:if="${canAdmin}"><a href="/admin/knowledge" class="active" title="知识库管理"><i class="fas fa-book"></i></a></li>
+                <li th:if="${canConfig}"><a href="/admin/settings" title="设置"><i class="fas fa-cog"></i></a></li>
+            </ul>
+        </aside>
+
+        <!-- 主内容区域 -->
+        <main class="main-content">
+            <!-- 顶部栏 -->
+            <header class="top-header">
+                <h1 class="page-title">文档详情</h1>
+                <div class="user-section">
+                    <div class="user-info">
+                        <span class="user-label" th:text="${roleName ?: '系统管理员'}">系统管理员</span>
+                        <span class="username" th:text="${username ?: 'ADMIN'}">ADMIN</span>
+                    </div>
+                    <div class="user-avatar" id="user-avatar" th:text="${avatarChar ?: '系'}">系</div>
+                    <!-- 简单的登出按钮 -->
+                    <a href="/logout" class="logout-btn" style="margin-left: 10px; text-decoration: none; color: #666;">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </a>
+                </div>
+            </header>
+
+            <!-- 内容区域容器 -->
+            <div class="content-wrapper">
+                <div class="content-panel">
+                    <div class="content-area">
+                        <a href="/admin/knowledge" class="back-btn"><i class="fas fa-arrow-left"></i> 返回列表</a>
+                        
+                        <div class="detail-card">
+                            <div class="detail-header">
+                                <h2 class="detail-title">
+                                    <i class="fas fa-file-pdf" style="color: #e74c3c;"></i>
+                                    <span th:text="${doc.title}">文档标题</span>
+                                </h2>
+                                <div class="detail-meta">
+                                    <div class="meta-item">
+                                        <i class="fas fa-tag"></i>
+                                        <span th:text="${doc.category != null ? doc.category : '未分类'}">类别</span>
+                                    </div>
+                                    <div class="meta-item">
+                                        <i class="fas fa-database"></i>
+                                        <span th:text="${doc.fileSize != null ? (doc.fileSize / 1024 + ' KB') : '未知大小'}">大小</span>
+                                    </div>
+                                    <div class="meta-item">
+                                        <i class="fas fa-fingerprint"></i>
+                                        <span th:text="${doc.id}">ID</span>
+                                    </div>
+                                    <div class="meta-item" th:if="${doc.minioObjectName}">
+                                        <i class="fas fa-cloud"></i>
+                                        <span>MinIO已存储</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="detail-content" th:text="${doc.content}">
+                                文档内容...
+                            </div>
+                            
+                            <div class="action-bar" th:if="${doc.minioObjectName}">
+                                <a th:href="@{/admin/knowledge/download/{id}(id=${doc.id})}" class="download-btn"><i class="fas fa-download"></i> 下载/预览原始文件</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

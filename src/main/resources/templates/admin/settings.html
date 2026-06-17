@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>设置 - CodeGuardian AI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+    <link rel="stylesheet" th:href="@{/css/settings.css}">
+</head>
+<body>
+    <div class="admin-container">
+        <!-- Main Sidebar (Icons) -->
+        <aside class="sidebar">
+            <div class="logo"><i class="fas fa-shield-alt"></i></div>
+            <ul class="sidebar-menu">
+                <li><a href="/dashboard" title="仪表盘"><i class="fas fa-chart-pie"></i></a></li>
+                <li th:if="${canReview or canQuery}"><a href="/review" title="搜索"><i class="fas fa-search"></i></a></li>
+                <li th:if="${canQuery}"><a href="/review/reports" title="任务列表"><i class="fas fa-file-lines"></i></a></li>
+                <li th:if="${canAdmin}"><a href="/admin/users" title="权限管理"><i class="fas fa-user-shield"></i></a></li>
+                <li th:if="${canAdmin}"><a href="/admin/knowledge" title="知识库管理"><i class="fas fa-book"></i></a></li>
+                <li th:if="${canConfig}"><a href="/admin/settings" class="active" title="设置"><i class="fas fa-cog"></i></a></li>
+            </ul>
+        </aside>
+
+        <!-- Main Content Area with Secondary Sidebar -->
+        <main class="main-content settings-layout" style="margin: 0; display: flex; flex-direction: column;">
+            
+            <!-- Top Header -->
+            <header class="top-header">
+                <h1 class="page-title">设置</h1>
+                <div class="user-section">
+                    <div class="user-info">
+                        <span class="user-label" th:text="${roleName ?: '系统管理员'}">系统管理员</span>
+                        <span class="username" th:text="${username ?: 'ADMIN'}">ADMIN</span>
+                    </div>
+                    <div class="user-avatar" id="user-avatar" th:text="${avatarChar ?: 'A'}">A</div>
+                    <a href="/api/auth/logout" class="logout-btn" style="text-decoration: none;">
+                        <i class="fas fa-sign-out-alt"></i> 登出
+                    </a>
+                </div>
+            </header>
+
+            <!-- Content Wrapper -->
+            <div class="content-wrapper">
+                <!-- Secondary Sidebar (Submenu Panel) -->
+                <aside class="submenu-panel">
+                    <nav class="submenu-nav">
+                        <a href="#general" class="submenu-item active">
+                            <i class="fas fa-sliders-h"></i>
+                            <span>常规</span>
+                        </a>
+                        <a href="#rules" class="submenu-item">
+                            <i class="fas fa-gavel"></i>
+                            <span>规则</span>
+                        </a>
+                        <a href="#scope" class="submenu-item">
+                            <i class="fas fa-filter"></i>
+                            <span>范围与忽略</span>
+                        </a>
+                        <a href="#visualization" class="submenu-item">
+                            <i class="fas fa-chart-bar"></i>
+                            <span>可视化</span>
+                        </a>
+                        <a href="#behavior" class="submenu-item">
+                            <i class="fas fa-robot"></i>
+                            <span>行为</span>
+                        </a>
+                        <a href="#import" class="submenu-item">
+                            <i class="fas fa-file-import"></i>
+                            <span>导入/导出</span>
+                        </a>
+                    </nav>
+                </aside>
+
+                <!-- Settings Content Scrollable -->
+                <div class="content-panel">
+                    <div class="settings-content" style="height: 100%; overflow-y: auto; padding-right: 10px;">
+                        
+                        <!-- General Section -->
+                        <div id="general" class="settings-section">
+                            <h3 class="section-title">常规</h3>
+                            <div class="form-text">选择项目根目录（用于目录/项目审查）。仅在浏览器沙箱中可读取相对路径。</div>
+                            
+                            <div class="file-input-wrapper">
+                                <input type="text" id="project-root" class="input-dark" style="width: 100%; padding: 8px;" placeholder="输入项目根目录路径" th:value="${settings.projectRoot}">
+                            </div>
+                            
+                            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                                <button type="button" class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+                                <button type="button" class="btn" onclick="location.reload()">恢复默认</button>
+                            </div>
+                        </div>
+
+                        <!-- Rules Section -->
+                        <div id="rules" class="settings-section">
+                            <h3 class="section-title">规则</h3>
+                            
+                            <div class="rules-grid">
+                                <!-- Categories -->
+                                <div class="rule-categories">
+                                    <div class="form-label" style="margin-bottom: 12px;">开启的规则分类</div>
+                                    <label class="checkbox-item"><input type="checkbox" id="rule-cat-security" th:checked="${settings.ruleCategories['security']}"> 安全</label>
+                                    <label class="checkbox-item"><input type="checkbox" id="rule-cat-performance" th:checked="${settings.ruleCategories['performance']}"> 性能</label>
+                                    <label class="checkbox-item"><input type="checkbox" id="rule-cat-maintainability" th:checked="${settings.ruleCategories['maintainability']}"> 可维护性</label>
+                                    <label class="checkbox-item"><input type="checkbox" id="rule-cat-style" th:checked="${settings.ruleCategories['style']}"> 风格</label>
+                                    <label class="checkbox-item"><input type="checkbox" id="rule-cat-logic_error" th:checked="${settings.ruleCategories['logic_error']}"> 逻辑错误</label>
+                                </div>
+
+                                <!-- Weights -->
+                                <div class="rule-weights">
+                                    <div class="form-label" style="margin-bottom: 8px;">规则权重 (0-100)</div>
+                                    
+                                    <div class="weight-item">
+                                        <span class="weight-label">安全</span>
+                                        <input type="range" class="range-slider" id="rule-weight-security" min="0" max="100" th:value="${settings.ruleWeights['security']}">
+                                        <span class="weight-value" th:text="${settings.ruleWeights['security']}"></span>
+                                    </div>
+                                    <div class="weight-item">
+                                        <span class="weight-label">性能</span>
+                                        <input type="range" class="range-slider" id="rule-weight-performance" min="0" max="100" th:value="${settings.ruleWeights['performance']}">
+                                        <span class="weight-value" th:text="${settings.ruleWeights['performance']}"></span>
+                                    </div>
+                                    <div class="weight-item">
+                                        <span class="weight-label">可维护性</span>
+                                        <input type="range" class="range-slider" id="rule-weight-maintainability" min="0" max="100" th:value="${settings.ruleWeights['maintainability']}">
+                                        <span class="weight-value" th:text="${settings.ruleWeights['maintainability']}"></span>
+                                    </div>
+                                    <div class="weight-item">
+                                        <span class="weight-label">风格</span>
+                                        <input type="range" class="range-slider" id="rule-weight-style" min="0" max="100" th:value="${settings.ruleWeights['style']}">
+                                        <span class="weight-value" th:text="${settings.ruleWeights['style']}"></span>
+                                    </div>
+                                    <div class="weight-item">
+                                        <span class="weight-label">逻辑错误</span>
+                                        <input type="range" class="range-slider" id="rule-weight-logic_error" min="0" max="100" th:value="${settings.ruleWeights['logic_error']}">
+                                        <span class="weight-value" th:text="${settings.ruleWeights['logic_error']}"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Rule Presets -->
+                            <div class="select-row">
+                                <div style="display: flex; flex-direction: column; gap: 5px;">
+                                    <span class="form-label">代码规范</span>
+                                    <select class="custom-select" id="rule-standard">
+                                        <option value="alibaba" th:selected="${settings.ruleStandard == 'alibaba'}">阿里巴巴 Java 规范</option>
+                                        <option value="google" th:selected="${settings.ruleStandard == 'google'}">Google Java Style</option>
+                                        <option value="airbnb" th:selected="${settings.ruleStandard == 'airbnb'}">Airbnb JS/TS规范</option>
+                                        <option value="pep8" th:selected="${settings.ruleStandard == 'pep8'}">PEP8 Python规范</option>
+                                    </select>
+                                </div>
+                                
+                                <div style="display: flex; flex-direction: column; gap: 5px;">
+                                    <span class="form-label">预设方案</span>
+                                    <select class="custom-select" id="rule-preset">
+                                        <option value="professional" th:selected="${settings.rulePreset == 'professional'}">专业安全</option>
+                                        <option value="general" th:selected="${settings.rulePreset == 'general'}">通用标准</option>
+                                    </select>
+                                </div>
+
+                                <button type="button" class="btn" style="margin-top: 24px;" onclick="saveSettings()">应用方案</button>
+                            </div>
+                        </div>
+
+                        <!-- Scope Section -->
+                        <div id="scope" class="settings-section">
+                            <h3 class="section-title">范围与忽略</h3>
+                            
+                            <div class="scope-grid">
+                                <div>
+                                    <label class="form-label">包含路径 (每行一个，支持子串匹配)</label>
+                                    <textarea class="textarea-dark" id="scope-includes" placeholder="例如: \nsrc/\napp/\nservices/" th:text="${settings.includePaths}"></textarea>
+                                </div>
+                                <div>
+                                    <label class="form-label">忽略路径 (每行一个，支持子串匹配)</label>
+                                    <textarea class="textarea-dark" id="scope-excludes" placeholder="例如: \nnode_modules/\ntarget/\ndist/\n.git/\n.idea/\n*.log\n.DS_Store" th:text="${settings.excludePaths}"></textarea>
+                                </div>
+                            </div>
+                            <button type="button" class="btn" style="margin-top: 15px;" onclick="saveSettings()">保存范围</button>
+                        </div>
+
+                        <!-- Visualization Section -->
+                        <div id="visualization" class="settings-section">
+                            <h3 class="section-title">可视化</h3>
+                            
+                            <div class="input-row">
+                                <span class="weight-label">健康分图高度 (px)</span>
+                                <input type="number" class="input-dark" id="vis-chart-height" th:value="${settings.chartHeight}">
+                            </div>
+                            <div class="input-row">
+                                <span class="weight-label">健康分圆环厚度 (%)</span>
+                                <input type="number" class="input-dark" id="vis-ring-thickness" th:value="${settings.ringThickness}">
+                            </div>
+                            <button type="button" class="btn" onclick="saveSettings()">应用到仪表盘</button>
+                        </div>
+
+                        <!-- Behavior Section -->
+                        <div id="behavior" class="settings-section">
+                            <h3 class="section-title">行为</h3>
+                            
+                            <div class="input-row">
+                                <span class="weight-label">最大展示问题数</span>
+                                <input type="number" class="input-dark" id="behavior-max-issues" th:value="${settings.maxIssues}">
+                            </div>
+                            <div class="input-row">
+                                <span class="weight-label">动画间隔 (ms)</span>
+                                <input type="number" class="input-dark" id="behavior-animation" th:value="${settings.animationInterval}">
+                            </div>
+                            <button type="button" class="btn" onclick="saveSettings()">保存行为配置</button>
+                        </div>
+
+                        <!-- Import/Export Section -->
+                        <div id="import" class="settings-section">
+                            <h3 class="section-title">导入/导出</h3>
+                            
+                            <div style="display: flex; gap: 10px;">
+                                <button type="button" class="btn" onclick="exportSettings()">导出设置</button>
+                                <button type="button" class="btn" onclick="triggerImport()">导入设置</button>
+                                <input type="file" id="importFile" style="display: none" accept=".json" onchange="importSettings(this)">
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let isManualNavigation = false;
+        let timeoutId;
+
+        // Simple navigation handling
+        document.querySelectorAll('.submenu-item').forEach(item => {
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                isManualNavigation = true;
+                if (timeoutId) clearTimeout(timeoutId);
+                
+                // Update active state
+                document.querySelectorAll('.submenu-item').forEach(nav => nav.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Scroll to section
+                const targetId = this.getAttribute('href').substring(1);
+                const targetSection = document.getElementById(targetId);
+                if (targetSection) {
+                    targetSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+
+                // Reset flag after animation
+                timeoutId = setTimeout(() => {
+                    isManualNavigation = false;
+                }, 1000);
+            });
+        });
+
+        // Sync scroll to active nav item (Intersection Observer)
+        const observerOptions = {
+            root: document.querySelector('.settings-content'),
+            threshold: 0.1,
+            rootMargin: "-10px 0px -70% 0px"
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            if (isManualNavigation) return;
+
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const id = entry.target.id;
+                    updateActiveNav(id);
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.settings-section').forEach(section => {
+            observer.observe(section);
+        });
+
+        // Handle bottom of page
+        const contentPanel = document.querySelector('.settings-content');
+        if (contentPanel) {
+            contentPanel.addEventListener('scroll', () => {
+                 if (isManualNavigation) return;
+                 if (contentPanel.scrollHeight - contentPanel.scrollTop <= contentPanel.clientHeight + 20) {
+                     const sections = document.querySelectorAll('.settings-section');
+                     if (sections.length > 0) {
+                         const lastId = sections[sections.length - 1].id;
+                         updateActiveNav(lastId);
+                     }
+                 }
+            });
+        }
+
+        function updateActiveNav(id) {
+             document.querySelectorAll('.submenu-item').forEach(nav => {
+                 if (nav.getAttribute('href') === '#' + id) {
+                     document.querySelectorAll('.submenu-item').forEach(n => n.classList.remove('active'));
+                     nav.classList.add('active');
+                 }
+             });
+        }
+
+        // Update range slider values display
+        document.querySelectorAll('.range-slider').forEach(slider => {
+            slider.addEventListener('input', function() {
+                this.nextElementSibling.textContent = this.value;
+            });
+        });
+
+        // Save Settings Function
+        function saveSettings() {
+            const data = {
+                projectRoot: document.getElementById('project-root').value,
+                
+                ruleCategories: {
+                    security: document.getElementById('rule-cat-security').checked,
+                    performance: document.getElementById('rule-cat-performance').checked,
+                    maintainability: document.getElementById('rule-cat-maintainability').checked,
+                    style: document.getElementById('rule-cat-style').checked,
+                    logic_error: document.getElementById('rule-cat-logic_error').checked
+                },
+                
+                ruleWeights: {
+                    security: parseInt(document.getElementById('rule-weight-security').value),
+                    performance: parseInt(document.getElementById('rule-weight-performance').value),
+                    maintainability: parseInt(document.getElementById('rule-weight-maintainability').value),
+                    style: parseInt(document.getElementById('rule-weight-style').value),
+                    logic_error: parseInt(document.getElementById('rule-weight-logic_error').value)
+                },
+                
+                ruleStandard: document.getElementById('rule-standard').value,
+                rulePreset: document.getElementById('rule-preset').value,
+                
+                includePaths: document.getElementById('scope-includes').value,
+                excludePaths: document.getElementById('scope-excludes').value,
+                
+                chartHeight: parseInt(document.getElementById('vis-chart-height').value),
+                ringThickness: parseInt(document.getElementById('vis-ring-thickness').value),
+                
+                maxIssues: parseInt(document.getElementById('behavior-max-issues').value),
+                animationInterval: parseInt(document.getElementById('behavior-animation').value)
+            };
+
+            fetch('/admin/settings/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    alert('设置已保存！');
+                } else {
+                    alert('保存失败: ' + result.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('保存出错，请查看控制台');
+            });
+        }
+
+        // Export Settings
+        function exportSettings() {
+            window.location.href = '/admin/settings/export';
+        }
+
+        // Trigger Import
+        function triggerImport() {
+            document.getElementById('importFile').click();
+        }
+
+        // Import Settings
+        function importSettings(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const settings = JSON.parse(e.target.result);
+                    
+                    fetch('/admin/settings/import', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(settings)
+                    })
+                    .then(response => response.json())
+                    .then(result => {
+                        if (result.success) {
+                            alert('设置导入成功！页面将刷新...');
+                            location.reload();
+                        } else {
+                            alert('导入失败: ' + result.message);
+                            input.value = ''; // Reset input
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('导入出错，请查看控制台');
+                        input.value = ''; // Reset input
+                    });
+                } catch (err) {
+                    alert('文件格式错误，请上传有效的 JSON 配置文件');
+                    console.error(err);
+                    input.value = ''; // Reset input
+                }
+            };
+            reader.readAsText(file);
+        }
+    </script>
+</body>
+</html>

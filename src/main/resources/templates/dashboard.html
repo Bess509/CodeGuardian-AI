@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>仪表盘 - CodeGuardian AI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" th:href="@{/css/dashboard.css?v=2.0}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- 左侧导航栏 -->
+        <aside class="sidebar">
+            <div class="logo"><i class="fas fa-shield-alt"></i></div>
+            <ul class="sidebar-menu">
+                <li><a href="/dashboard" class="active" title="仪表盘"><i class="fas fa-chart-pie"></i></a></li>
+                <li th:if="${canReview or canQuery}"><a href="/review" title="搜索"><i class="fas fa-search"></i></a></li>
+                <li th:if="${canQuery}"><a href="/review/reports" title="任务列表"><i class="fas fa-file-lines"></i></a></li>
+                <li th:if="${canAdmin}"><a href="/admin/users" title="权限管理"><i class="fas fa-user-shield"></i></a></li>
+                <li th:if="${canAdmin}"><a href="/admin/knowledge" title="知识库管理"><i class="fas fa-book"></i></a></li>
+                <li th:if="${canConfig}"><a href="/admin/settings" title="设置"><i class="fas fa-cog"></i></a></li>
+            </ul>
+        </aside>
+
+        <!-- 主内容区域 -->
+        <main class="main-content">
+            <!-- 顶部导航栏 -->
+            <header class="top-header">
+                <h1 class="page-title">仪表盘</h1>
+                <div class="user-section">
+                    <div class="user-info">
+                        <span class="user-label" th:text="${roleName ?: '系统管理员'}">系统管理员</span>
+                        <span class="username" th:text="${username ?: 'ADMIN'}">ADMIN</span>
+                    </div>
+                    <div class="user-avatar" id="user-avatar" th:text="${avatarChar ?: 'A'}">A</div>
+                    <button class="logout-btn" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i> 登出
+                    </button>
+                </div>
+            </header>
+
+            <!-- 图表区域 -->
+            <div class="charts-container">
+                <!-- 图表1: 代码健康分 -->
+                <div class="chart-card">
+                    <h2 class="chart-title">代码健康分</h2>
+                    <div class="chart-wrapper">
+                        <canvas id="healthScoreChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 图表2: 问题分布 -->
+                <div class="chart-card">
+                    <h2 class="chart-title">问题分布</h2>
+                    <div class="chart-wrapper">
+                        <canvas id="problemDistributionChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 图表3: 项目问题统计 -->
+                <div class="chart-card full-width">
+                    <h2 class="chart-title">项目问题统计</h2>
+                    <div class="chart-wrapper">
+                        <canvas id="projectStatisticsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script th:inline="javascript">
+        window.dashboardConfig = {
+            chartHeight: /*[[${config.chartHeight}]]*/ 300,
+            ringThickness: /*[[${config.ringThickness}]]*/ 20
+        };
+        window.dashboardData = /*[[${dashboardData}]]*/ {
+            healthScore: 100,
+            problemDistribution: { critical: 0, high: 0, medium: 0, low: 0 },
+            projectStats: []
+        };
+    </script>
+    <script th:src="@{/js/http.js?v=2.0}"></script>
+    <script th:src="@{/js/dashboard.js?v=2.0}"></script>
+</body>
+</html>

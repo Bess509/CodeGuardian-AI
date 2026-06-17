@@ -1,0 +1,114 @@
+{
+  "name": "PEP8",
+  "description": "PEP 8 -- Style Guide for Python Code，Python官方推荐的代码风格指南。",
+  "rules": [
+    {
+      "id": 1,
+      "name": "函数命名",
+      "description": "函数名应使用snake_case风格。",
+      "pattern": "def\\s+[A-Z][a-zA-Z0-9]*",
+      "severity": "MEDIUM",
+      "weight": 60,
+      "suggestion": "建议函数名使用小写字母和下划线（snake_case）。"
+    },
+    {
+      "id": 2,
+      "name": "类命名",
+      "description": "类名应使用CapWords（PascalCase）风格。",
+      "pattern": "class\\s+[a-z][a-zA-Z0-9_]*",
+      "severity": "MEDIUM",
+      "weight": 60,
+      "suggestion": "建议类名使用首字母大写的驼峰命名（CapWords）。"
+    },
+    {
+      "id": 3,
+      "name": "常量命名",
+      "description": "常量名应全大写，用下划线分隔。",
+      "pattern": "^[A-Z][A-Z0-9_]*\\s*=\\s*",
+      "severity": "LOW",
+      "weight": 40,
+      "suggestion": "建议常量名全大写。"
+    },
+    {
+      "id": 4,
+      "name": "比较None",
+      "description": "与None比较应使用 is 或 is not，不要使用 ==。",
+      "pattern": "==\\s*None|!=\\s*None",
+      "severity": "HIGH",
+      "weight": 70,
+      "suggestion": "建议使用 'is None' 或 'is not None'。"
+    },
+    {
+      "id": 5,
+      "name": "比较True/False",
+      "description": "不要直接比较布尔值。",
+      "pattern": "==\\s*True|==\\s*False",
+      "severity": "LOW",
+      "weight": 30,
+      "suggestion": "建议直接使用条件表达式，如 'if x:' 而不是 'if x == True:'。"
+    },
+    {
+      "id": 6,
+      "name": "导入通配符",
+      "description": "禁止使用通配符导入。",
+      "pattern": "from\\s+\\w+\\s+import\\s+\\*",
+      "severity": "MEDIUM",
+      "weight": 50,
+      "suggestion": "建议明确导入所需的名称，避免污染命名空间。"
+    },
+    {
+      "id": 7,
+      "name": "行内导入",
+      "description": "import语句应放在文件顶部，不建议在函数内部导入。",
+      "pattern": "\\s+import\\s+|\\s+from\\s+\\w+\\s+import",
+      "severity": "LOW",
+      "weight": 20,
+      "suggestion": "建议将所有import语句移至文件顶部。"
+    },
+    {
+      "id": 8,
+      "name": "异常捕获",
+      "description": "不要使用裸露的except子句。",
+      "pattern": "except:",
+      "severity": "MEDIUM",
+      "weight": 60,
+      "suggestion": "建议捕获具体的异常，如 'except ValueError:'，或至少 'except Exception:'。"
+    },
+    {
+      "id": 9,
+      "name": "Lambda表达式",
+      "description": "不要将lambda表达式赋值给变量，应使用def定义函数。",
+      "pattern": "\\w+\\s*=\\s*lambda\\s+",
+      "severity": "LOW",
+      "weight": 30,
+      "suggestion": "建议使用 'def' 定义命名函数，而不是将 lambda 赋值给变量。"
+    },
+    {
+      "id": 10,
+      "name": "Mutable Default Arguments",
+      "description": "不要使用可变对象作为函数默认参数。",
+      "pattern": "def\\s+\\w+\\([^)]*=\\s*(\\[\\]|\\{\\}|set\\(\\))",
+      "severity": "HIGH",
+      "weight": 90,
+      "suggestion": "建议使用None作为默认值，并在函数内部初始化可变对象。"
+    },
+    {
+      "id": 11,
+      "name": "单行if/for/while",
+      "description": "不要将if/for/while语句写在同一行。",
+      "pattern": "(if|for|while)\\s+.*:\\s*\\w+",
+      "severity": "LOW",
+      "weight": 30,
+      "suggestion": "建议换行缩进代码块，提高可读性。"
+    },
+    {
+      "id": 12,
+      "name": "Print使用",
+      "description": "生产代码中尽量避免使用print。",
+      "pattern": "print\\(",
+      "severity": "LOW",
+      "weight": 20,
+      "suggestion": "建议使用logging模块记录日志。"
+    }
+  ]
+}

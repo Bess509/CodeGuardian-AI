@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - CodeGuardian AI</title>
+    <link rel="stylesheet" th:href="@{/css/login.css}">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-panel">
+            <!-- Logo和标题 -->
+            <div class="login-header">
+                <div class="logo">
+                    <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M24 4L6 12V24C6 33.941 13.373 42.363 24 44C34.627 42.363 42 33.941 42 24V12L24 4Z" fill="#3B82F6" stroke="#3B82F6" stroke-width="2"/>
+                        <path d="M24 18L18 20V26C18 29.314 20.686 32 24 32C27.314 32 30 29.314 30 26V20L24 18Z" fill="white"/>
+                    </svg>
+                </div>
+                <h1 class="title">CodeGuardian AI</h1>
+                <p class="subtitle">智能代码审查系统</p>
+            </div>
+
+            <!-- 登录表单 -->
+            <form th:action="@{/login}" th:object="${loginRequest}" method="post" class="login-form">
+                <!-- 错误提示 -->
+                <div th:if="${error}" class="error-message" th:text="${error}"></div>
+
+                <!-- 用户名或邮箱输入框 -->
+                <div class="form-group">
+                    <label for="usernameOrEmail" class="form-label">用户名或邮箱</label>
+                    <input 
+                        type="text" 
+                        id="usernameOrEmail" 
+                        name="usernameOrEmail"
+                        th:field="*{usernameOrEmail}"
+                        class="form-input" 
+                        placeholder="请输入用户名或邮箱"
+                        required
+                        autocomplete="username">
+                </div>
+
+                <!-- 密码输入框 -->
+                <div class="form-group">
+                    <label for="password" class="form-label">密码</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        name="password"
+                        th:field="*{password}"
+                        class="form-input" 
+                        placeholder="请输入密码"
+                        required
+                        autocomplete="current-password">
+                </div>
+
+                <!-- 登录按钮 -->
+                <button type="submit" class="login-button">
+                    <svg class="login-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M7.5 15L12.5 10L7.5 5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M12.5 10H2.5" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    <span>登录</span>
+                </button>
+            </form>
+
+            
+        </div>
+    </div>
+
+    
+</body>
+</html>

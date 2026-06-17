@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>知识库管理 - CodeGuardian AI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+    <style>
+        .upload-section {
+            background-color: var(--card-bg);
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            border: 1px dashed var(--border-color);
+            transition: border-color 0.3s;
+        }
+        .upload-section:hover {
+            border-color: var(--primary-color);
+        }
+        .upload-form {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-top: 16px;
+        }
+        .file-input {
+            flex-grow: 1;
+            padding: 10px;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-color);
+            font-size: 14px;
+        }
+        .file-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+        .upload-btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background-color 0.2s;
+            white-space: nowrap;
+        }
+        .upload-btn:hover {
+            background-color: #4a9eff;
+        }
+        .upload-btn:disabled {
+            background-color: var(--text-secondary-color);
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        .upload-title {
+            color: var(--text-color);
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .upload-desc {
+            color: var(--text-secondary-color);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .message {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+        }
+        .message.success {
+            background-color: rgba(22, 163, 74, 0.1);
+            color: #4ade80;
+            border: 1px solid rgba(22, 163, 74, 0.2);
+        }
+        .message.error {
+            background-color: rgba(220, 38, 38, 0.1);
+            color: #f87171;
+            border: 1px solid rgba(220, 38, 38, 0.2);
+        }
+        
+        /* Table Styles Adjustment */
+        .id-cell {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: var(--text-secondary-color);
+            white-space: nowrap;
+        }
+        .content-cell {
+            color: var(--text-secondary-color);
+            font-size: 13px;
+        }
+        .search-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        .search-input {
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            width: 300px;
+        }
+        .search-btn {
+            background-color: var(--secondary-color);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .page-btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        .action-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        .action-btn.delete {
+            color: #ef4444;
+        }
+        .action-btn.delete:hover {
+            background-color: rgba(239, 68, 68, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <!-- 左侧导航栏 -->
+        <aside class="sidebar">
+            <div class="logo"><i class="fas fa-shield-alt"></i></div>
+            <ul class="sidebar-menu">
+                <li><a href="/dashboard" title="仪表盘"><i class="fas fa-chart-pie"></i></a></li>
+                <li th:if="${canReview or canQuery}"><a href="/review" title="搜索"><i class="fas fa-search"></i></a></li>
+                <li th:if="${canQuery}"><a href="/review/reports" title="任务列表"><i class="fas fa-file-lines"></i></a></li>
+                <li th:if="${canAdmin}"><a href="/admin/users" title="权限管理"><i class="fas fa-user-shield"></i></a></li>
+                <li th:if="${canAdmin}"><a href="/admin/knowledge" title="知识库管理"><i class="fas fa-book"></i></a></li>
+                <li th:if="${canConfig}"><a href="/admin/settings" title="设置"><i class="fas fa-cog"></i></a></li>
+            </ul>
+        </aside>
+
+        <!-- 主内容区域 -->
+        <main class="main-content">
+            <!-- 顶部栏 -->
+            <header class="top-header">
+                <h1 class="page-title">知识库管理</h1>
+                <div class="user-section">
+                    <div class="user-info">
+                        <span class="user-label" th:text="${roleName ?: '系统管理员'}">系统管理员</span>
+                        <span class="username" th:text="${username ?: 'ADMIN'}">ADMIN</span>
+                    </div>
+                    <div class="user-avatar" id="user-avatar" th:text="${avatarChar ?: '系'}">系</div>
+                    <!-- 简单的登出按钮 -->
+                    <a href="/logout" class="logout-btn" style="margin-left: 10px; text-decoration: none; color: #666;">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </a>
+                </div>
+            </header>
+
+            <!-- 内容区域容器 -->
+            <div class="content-wrapper">
+                <div class="content-panel">
+                    <div class="content-area">
+                        <div class="content-window">
+                            <!-- 消息提示 -->
+                            <div th:if="${success}" class="message success">
+                                <i class="fas fa-check-circle"></i> <span th:text="${success}"></span>
+                            </div>
+                            <div th:if="${error}" class="message error">
+                                <i class="fas fa-exclamation-circle"></i> <span th:text="${error}"></span>
+                            </div>
+
+                            <!-- 上传区域 -->
+                            <div class="upload-section">
+                                <h3 class="upload-title"><i class="fas fa-file-pdf" style="color: #e74c3c;"></i> 上传 PDF 文档</h3>
+                                <p class="upload-desc">上传的代码规范或技术文档将被解析并存入向量知识库，用于辅助代码审查。</p>
+                                <form action="/admin/knowledge/upload" method="post" enctype="multipart/form-data" class="upload-form">
+                                    <input type="file" name="file" accept=".pdf" class="file-input" required>
+                                    <button type="submit" class="upload-btn"><i class="fas fa-cloud-upload-alt"></i> 上传并索引</button>
+                                </form>
+                            </div>
+
+                            <!-- 搜索框 -->
+                            <form action="/admin/knowledge" method="get" class="search-form">
+                                <input type="text" name="keyword" class="search-input" placeholder="搜索文档标题..." th:value="${keyword}">
+                                <button type="submit" class="search-btn"><i class="fas fa-search"></i> 搜索</button>
+                            </form>
+
+                            <!-- 文档表格 -->
+                            <div class="table-container">
+                                <table class="user-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 25%;">ID</th>
+                                            <th style="width: 20%;">标题</th>
+                                            <th style="width: 10%;">类别</th>
+                                            <th style="width: 20%;">内容预览</th>
+                                            <th style="width: 15%;">上传时间</th>
+                                            <th style="width: 10%;">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr th:each="doc : ${page.content}">
+                                            <td class="id-cell" th:text="${doc.id}" th:title="${doc.id}">ID</td>
+                                            <td>
+                                                <i class="fas fa-file-alt" style="color: #3498db; margin-right: 5px;"></i>
+                                                <a th:href="@{/admin/knowledge/detail/{id}(id=${doc.id})}" th:text="${doc.title}" style="color: var(--primary-color); text-decoration: none;">标题</a>
+                                            </td>
+                                            <td>
+                                                <span class="status-tag active" th:text="${doc.category != null ? doc.category : '未分类'}">类别</span>
+                                            </td>
+                                            <td class="content-cell" th:text="${#strings.abbreviate(doc.content, 80)}">内容...</td>
+                                            <td style="color: var(--text-secondary-color); font-size: 13px;" 
+                                                th:text="${#temporals.format(doc.createTime, 'yyyy-MM-dd HH:mm')}">
+                                                2023-01-01 12:00
+                                            </td>
+                                            <td>
+                                                <form th:action="@{/admin/knowledge/delete/{id}(id=${doc.id})}" method="post" style="display:inline;" onsubmit="return confirm('确定要删除该文档吗？');">
+                                                    <button type="submit" class="action-btn delete" title="删除">
+                                                        <i class="fas fa-trash-alt"></i>
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                        <tr th:if="${page.empty}">
+                                            <td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary-color);">
+                                                <i class="fas fa-inbox" style="font-size: 48px; margin-bottom: 10px; display: block; opacity: 0.5;"></i>
+                                                暂无知识库文档，请上传PDF文件
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- 分页控件 -->
+                            <div class="pagination" th:if="${page.totalElements > 0}">
+                                <a th:href="@{/admin/knowledge(page=${page.number == 0 ? 1 : page.number}, size=${page.size}, keyword=${keyword})}" 
+                                   class="page-btn" 
+                                   th:classappend="${page.first} ? 'disabled'"
+                                   th:attr="onclick=${page.first} ? 'return false' : ''">
+                                    上一页
+                                </a>
+                                
+                                <span class="page-info" th:text="'第' + (${page.number} + 1) + '/' + (${page.totalPages} > 0 ? ${page.totalPages} : 1) + '页 (共' + ${page.totalElements} + '条)'">
+                                    第1/1页 (共0条)
+                                </span>
+                                
+                                <a th:href="@{/admin/knowledge(page=${page.number + 2}, size=${page.size}, keyword=${keyword})}" 
+                                   class="page-btn" 
+                                   th:classappend="${page.last} ? 'disabled'"
+                                   th:attr="onclick=${page.last} ? 'return false' : ''">
+                                    下一页
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 自动消失消息
+            const messages = document.querySelectorAll('.message');
+            if (messages.length > 0) {
+                setTimeout(function() {
+                    messages.forEach(function(msg) {
+                        msg.style.transition = 'opacity 0.5s ease';
+                        msg.style.opacity = '0';
+                        setTimeout(function() {
+                            msg.remove();
+                        }, 500);
+                    });
+                }, 5000); // 5秒后开始消失
+            }
+
+            const form = document.querySelector('.upload-form');
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    const btn = this.querySelector('.upload-btn');
+                    const fileInput = this.querySelector('.file-input');
+                    
+                    if (fileInput.files.length > 0) {
+                        btn.disabled = true;
+                        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 正在上传并处理...';
+                        
+                        // 针对大文件的提示更新
+                        setTimeout(() => {
+                            if(btn.disabled) {
+                                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 文件较大，正在切分向量化...';
+                            }
+                        }, 3000);
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>历史报告 - CodeGuardian AI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" th:href="@{/css/review.css}">
+    <link rel="stylesheet" th:href="@{/css/history.css?v=1.4}">
+</head>
+<body>
+    <div class="review-container">
+        <!-- 左侧导航栏 -->
+        <aside class="sidebar">
+            <div class="logo"><i class="fas fa-shield-alt"></i></div>
+            <ul class="sidebar-menu">
+                <li><a href="/dashboard" title="仪表盘"><i class="fas fa-chart-pie"></i></a></li>
+                <li th:if="${canReview or canQuery}"><a href="/review" title="搜索"><i class="fas fa-search"></i></a></li>
+                <li th:if="${canQuery}"><a href="/review/reports" class="active" title="任务列表"><i class="fas fa-file-lines"></i></a></li>
+                <li th:if="${canAdmin}"><a href="/admin/users" title="权限管理"><i class="fas fa-user-shield"></i></a></li>
+                <li th:if="${canAdmin}"><a href="/admin/knowledge" title="知识库管理"><i class="fas fa-book"></i></a></li>
+                <li th:if="${canConfig}"><a href="/admin/settings" title="设置"><i class="fas fa-cog"></i></a></li>
+            </ul>
+        </aside>
+
+        <!-- 主内容区域 -->
+        <main class="main-content">
+            <!-- 顶部标题栏 -->
+            <header class="top-header">
+                <h1 class="page-title">历史报告</h1>
+                <div class="user-section">
+                    <div class="user-info">
+                        <span class="user-label" th:text="${roleName ?: '系统管理员'}">系统管理员</span>
+                        <span class="username" th:text="${username ?: 'ADMIN'}">ADMIN</span>
+                    </div>
+                    <div class="user-avatar" th:text="${avatarChar ?: '系'}">系</div>
+                    <button class="logout-btn" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i> 登出
+                    </button>
+                </div>
+            </header>
+
+            <!-- 内容区域 -->
+            <div class="content-area history-content">
+                <!-- 筛选栏 -->
+                <div class="filter-bar">
+                    <div class="filter-group">
+                        <label>名称 (项目/文件/目录/片段)</label>
+                        <input type="text" id="nameFilter" placeholder="输入名称关键词" class="form-input">
+                    </div>
+                    <div class="filter-group">
+                        <label>范围</label>
+                        <select id="scopeFilter" class="form-select">
+                            <option value="">全部</option>
+                            <option value="PROJECT">项目</option>
+                            <option value="DIRECTORY">目录</option>
+                            <option value="FILE">文件</option>
+                            <option value="SNIPPET">片段</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>状态</label>
+                        <select id="statusFilter" class="form-select">
+                            <option value="">全部</option>
+                            <option value="PENDING">待处理</option>
+                            <option value="RUNNING">运行中</option>
+                            <option value="COMPLETED">已完成</option>
+                            <option value="FAILED">失败</option>
+                            <option value="CANCELLED">已取消</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>时间范围</label>
+                        <select id="timeRangeFilter" class="form-select">
+                            <option value="">全部时间</option>
+                            <option value="today">今天</option>
+                            <option value="week">本周</option>
+                            <option value="month">本月</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>起始日期</label>
+                        <input type="date" id="startDateFilter" class="form-input date-input">
+                    </div>
+                    <div class="filter-group">
+                        <label>截止日期</label>
+                        <input type="date" id="endDateFilter" class="form-input date-input">
+                    </div>
+                    <div class="filter-actions">
+                        <button class="btn-primary search-btn" onclick="searchHistory()">查询</button>
+                        <button class="btn-secondary reset-btn" onclick="resetFilters()">重置</button>
+                    </div>
+                </div>
+
+                <!-- 列表区域 -->
+                <div class="history-table-container">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th width="60">序号</th>
+                                <th>名称</th>
+                                <th width="120">范围</th>
+                                <th width="110">状态</th>
+                                <th width="180">审查时间</th>
+                                <th>问题统计</th>
+                                <th width="310">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                            <!-- 数据将通过JS加载 -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 分页区域 -->
+                <div class="pagination-container">
+                    <span class="pagination-info" id="paginationInfo">共 0 条记录，当前第 1/1 页</span>
+                    <div class="pagination-controls">
+                        <button class="btn-secondary prev-btn" onclick="prevPage()" disabled>上一页</button>
+                        <span class="current-page" id="pageDisplay">第 1/1 页</span>
+                        <button class="btn-secondary next-btn" onclick="nextPage()" disabled>下一页</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="trace-modal-overlay" id="traceGraphModal" style="display: none;" onclick="closeTraceGraphFromBackdrop(event)">
+        <div class="trace-modal" role="dialog" aria-modal="true" aria-labelledby="traceGraphTitle">
+            <div class="trace-modal-header">
+                <div>
+                    <div class="trace-modal-kicker">Trace Graph</div>
+                    <h2 class="trace-modal-title" id="traceGraphTitle">溯源图</h2>
+                </div>
+                <button class="trace-modal-close" type="button" onclick="closeTraceGraph()" title="关闭">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="trace-modal-body" id="traceGraphBody">
+                <div class="trace-loading">正在加载溯源图...</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="trace-modal-overlay" id="qualityGateModal" style="display: none;" onclick="closeQualityGateFromBackdrop(event)">
+        <div class="trace-modal gate-modal" role="dialog" aria-modal="true" aria-labelledby="qualityGateTitle">
+            <div class="trace-modal-header">
+                <div>
+                    <div class="trace-modal-kicker">Quality Gate</div>
+                    <h2 class="trace-modal-title" id="qualityGateTitle">门禁结果</h2>
+                </div>
+                <button class="trace-modal-close" type="button" onclick="closeQualityGate()" title="关闭">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="trace-modal-body" id="qualityGateBody">
+                <div class="trace-loading">正在加载门禁结果...</div>
+            </div>
+        </div>
+    </div>
+
+    <script th:src="@{/js/history.js?v=1.4}"></script>
+    <script th:inline="javascript">
+        // 将后端权限变量注入到全局JS变量中
+        const canAdmin = /*[[${canAdmin}]]*/ false;
+
+        function logout() {
+            window.location.href = '/logout';
+        }
+    </script>
+</body>
+</html>

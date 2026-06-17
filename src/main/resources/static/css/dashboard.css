@@ -1,0 +1,283 @@
+/* 仪表盘样式 */
+:root {
+    --bg-color: #0d1117;
+    --sidebar-bg: #161b22;
+    --primary-color: #58a6ff;
+    --text-color: #c9d1d9;
+    --text-secondary-color: #8b949e;
+    --border-color: #30363d;
+    --header-bg: #161b22;
+    --card-bg: #161b22;
+    --hover-bg: #21262d;
+    --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-family);
+    margin: 0;
+    padding: 0;
+    display: flex;
+    height: 100vh;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    overflow: hidden;
+}
+
+.dashboard-container {
+    display: flex;
+    width: 100%;
+    height: 100vh;
+}
+
+/* 左侧导航栏 */
+.sidebar {
+    width: 60px;
+    background-color: var(--sidebar-bg);
+    padding: 15px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border-right: 1px solid var(--border-color);
+    transition: width 0.3s ease;
+    position: relative;
+    z-index: 2000; /* 极大提升层级，防止被遮挡 */
+}
+
+/* 左侧紫色指示条 */
+.sidebar::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 3px;
+    height: 100%;
+    background: linear-gradient(180deg, #9333EA 0%, #7C3AED 100%);
+    z-index: 2001;
+}
+
+.logo {
+    font-size: 24px;
+    color: var(--primary-color);
+    margin-bottom: 30px;
+    position: relative;
+    z-index: 2;
+}
+
+.sidebar-menu {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    width: 100%;
+    position: relative;
+    z-index: 2;
+}
+
+.sidebar-menu a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 50px;
+    text-decoration: none;
+    color: var(--text-secondary-color);
+    transition: background-color 0.3s, color 0.3s;
+    position: relative;
+}
+
+.sidebar-menu a:hover, .sidebar-menu a.active {
+    background-color: var(--hover-bg);
+    color: white;
+}
+
+.sidebar-menu a.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 60%;
+    background-color: var(--primary-color);
+    border-radius: 0 4px 4px 0;
+}
+
+.sidebar-menu a i {
+    font-size: 20px;
+}
+
+/* 主内容区域 */
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-color);
+    position: relative;
+    z-index: auto; /* 移除固定层级，允许子元素参与全局层级 */
+    overflow-y: auto;
+}
+
+/* 顶部导航栏 */
+.top-header {
+    padding: 10px 25px;
+    background-color: var(--header-bg);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 60px;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 1500; /* 确保在内容之上，但低于侧边栏 */
+}
+
+/* 强制隐藏可能存在的全局遮罩层 */
+.modal-overlay, .modal-backdrop, .overlay, .modal {
+    display: none !important;
+}
+
+.page-title {
+    margin: 0;
+    font-size: 1.5em;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.user-section {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.user-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+
+.user-label {
+    font-size: 12px;
+    color: var(--text-secondary-color);
+}
+
+.username {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.logout-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-color);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.logout-btn:hover {
+    background-color: var(--hover-bg);
+    border-color: var(--primary-color);
+}
+
+.logout-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* 图表容器 */
+.charts-container {
+    padding: 32px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    overflow: visible;
+}
+
+.chart-card {
+    background-color: var(--card-bg);
+    border-radius: 8px;
+    padding: 20px;
+    border: 1px solid var(--border-color);
+}
+
+.chart-card.full-width {
+    grid-column: 1 / -1;
+}
+
+.chart-title {
+    margin-top: 0;
+    font-size: 1.2em;
+    font-weight: 600;
+    color: var(--primary-color);
+    margin-bottom: 20px;
+}
+
+.chart-wrapper {
+    position: relative;
+    height: 300px;
+    overflow: visible;
+}
+
+.chart-card.full-width .chart-wrapper {
+    height: 320px;
+    min-height: 320px;
+}
+
+/* 响应式设计 */
+@media (max-width: 1024px) {
+    .charts-container {
+        grid-template-columns: 1fr;
+    }
+    
+    .chart-card.full-width {
+        grid-column: 1;
+    }
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        width: 60px;
+    }
+    
+    .main-content {
+        margin-left: 60px;
+    }
+    
+    .top-header {
+        padding: 16px 20px;
+    }
+    
+    .charts-container {
+        padding: 20px;
+        gap: 16px;
+    }
+    
+    .user-info {
+        display: none;
+    }
+}
+

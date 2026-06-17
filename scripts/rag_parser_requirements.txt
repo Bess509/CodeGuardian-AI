@@ -1,0 +1,4 @@
+markitdown==0.1.6
+pymupdf4llm==1.27.2.3
+docling==2.102.2
+pdfplumber==0.11.10

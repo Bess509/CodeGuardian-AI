@@ -1,0 +1,173 @@
+spring:
+  application:
+    name: code-review-ai-agent
+  # Web配置
+  web:
+    resources:
+      add-mappings: false  # 禁用默认的静态资源映射，避免404错误
+  
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+  # Thymeleaf配置
+  thymeleaf:
+    prefix: classpath:/templates/
+    suffix: .html
+    mode: HTML
+    encoding: UTF-8
+    cache: false  # 开发环境禁用缓存
+    servlet:
+      content-type: text/html
+  
+  # Jackson配置（支持Java 8时间类型）
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false  # 不使用时间戳，使用ISO-8601格式
+    time-zone: UTC
+  # 数据源配置（默认使用 PostgreSQL，可通过环境变量覆盖）
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/code_guardian}
+    driver-class-name: org.postgresql.Driver
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  # JPA配置
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          time_zone: UTC
+        use_sql_comments: true
+
+  # Spring AI配置
+  ai:
+    enabled: true
+    embedding:
+      transformer:
+        enabled: true
+    # OpenAI配置
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      embedding:
+        enabled: true
+      chat:
+        options:
+          model: ${OPENAI_MODEL:gpt-3.5-turbo}
+          temperature: 0.3
+          max-tokens: 4000
+    
+    # Transformers (Local) 配置
+    transformers:
+      embedding:
+        enabled: true
+        cache:
+          enabled: true
+          directory: ${user.home}/.cache/spring-ai/transformers
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      timeout: 20000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-wait: -1ms
+          max-idle: 8
+          min-idle: 0
+app:
+  cicd:
+    api-token: ${CODEGUARDIAN_CI_TOKEN:}
+  rag:
+    vectorize-on-startup: true
+    parser:
+      enabled: ${RAG_PARSER_ENABLED:true}
+      python-command: ${RAG_PARSER_PYTHON:python}
+      script-path: ${RAG_PARSER_SCRIPT:scripts/rag_parse_document.py}
+      timeout-seconds: ${RAG_PARSER_TIMEOUT_SECONDS:180}
+    
+    # Ollama配置（用于本地DeepSeek）
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      embedding:
+        enabled: true
+      chat:
+        options:
+          model: ${OLLAMA_MODEL:deepseek-r1:8b}
+          temperature: 0.3
+          num-predict: 4000
+      # 超时配置（本地模型需要更长时间）
+      client:
+        connect-timeout: 300s
+        read-timeout: 300s
+
+    # Vector Store配置
+    vectorstore:
+      pgvector:
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        dimensions: 384 # Transformers default (all-MiniLM-L6-v2)
+        initialize-schema: true
+
+    # Qwen配置（使用OpenAI兼容接口）
+    qwen:
+      api-key: ${DASHSCOPE_API_KEY:}
+      base-url: ${QWEN_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
+      chat:
+        options:
+          model: ${QWEN_MODEL:qwen3.6-plus}
+          temperature: 0.3
+          max-tokens: 4000
+
+# Sa-Token配置
+sa-token: 
+  # token名称 (同时也是cookie名称)
+  token-name: satoken
+  # token有效期，单位s 默认30天, -1代表永不过期
+  timeout: 86400
+  # 是否允许同一账号并发登录 (为true时允许一起登录, 为false时新登录挤掉旧登录) 
+  is-concurrent: true
+  # 在多人登录同一账号时，是否共用一个token (为true时所有登录共用一个token, 为false时每次登录新建一个token) 
+  is-share: true
+  # token风格
+  token-style: uuid
+  # 是否输出操作日志 
+  is-log: false
+
+# MinIO配置
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:}
+  secret-key: ${MINIO_SECRET_KEY:}
+  bucket-name: ${MINIO_BUCKET:code-review}
+# 服务器配置
+server:
+  port: 7003
+  tomcat:
+    max-swallow-size: 100MB
+  servlet:
+    context-path: /
+gitcode:
+  api:
+    base-url: https://api.gitcode.com/api/v5
+  token: ${GITCODE_TOKEN:}
+djl:
+  cache:
+    dir: ${user.home}/.cache/djl
+
+ai:
+  enabled: true

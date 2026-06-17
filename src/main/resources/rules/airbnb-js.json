@@ -1,0 +1,132 @@
+{
+  "name": "AIRBNB",
+  "description": "Airbnb JavaScript/TypeScript Style Guide，目前最流行的JS/TS代码规范。",
+  "rules": [
+    {
+      "id": 1,
+      "name": "使用const/let",
+      "description": "使用const或let声明变量，禁止使用var。",
+      "pattern": "\\bvar\\s+\\w+",
+      "severity": "HIGH",
+      "weight": 90,
+      "suggestion": "建议使用const声明常量，let声明变量，避免使用var导致变量提升问题。"
+    },
+    {
+      "id": 2,
+      "name": "优先使用const",
+      "description": "如果变量不会被重新赋值，必须使用const。",
+      "pattern": "\\blet\\s+(\\w+)\\s*=[^;]+;(?!.*\\1\\s*=)",
+      "severity": "MEDIUM",
+      "weight": 60,
+      "suggestion": "建议优先使用const，除非需要重新赋值。"
+    },
+    {
+      "id": 3,
+      "name": "对象字面量",
+      "description": "使用字面量语法创建对象。",
+      "pattern": "new\\s+Object\\(\\)",
+      "severity": "LOW",
+      "weight": 30,
+      "suggestion": "建议使用字面量 {} 创建对象。"
+    },
+    {
+      "id": 4,
+      "name": "数组字面量",
+      "description": "使用字面量语法创建数组。",
+      "pattern": "new\\s+Array\\(\\)",
+      "severity": "LOW",
+      "weight": 30,
+      "suggestion": "建议使用字面量 [] 创建数组。"
+    },
+    {
+      "id": 5,
+      "name": "单引号使用",
+      "description": "字符串使用单引号 ''。",
+      "pattern": "\"(?![^\"]*')[^\"]*\"",
+      "severity": "LOW",
+      "weight": 40,
+      "suggestion": "建议字符串使用单引号，除包含单引号的字符串外。"
+    },
+    {
+      "id": 6,
+      "name": "模板字符串",
+      "description": "程序化构建字符串时，使用模板字符串代替拼接。",
+      "pattern": "'[^']*'\\s*\\+\\s*\\w+|\\w+\\s*\\+\\s*'[^']*'",
+      "severity": "MEDIUM",
+      "weight": 50,
+      "suggestion": "建议使用模板字符串 `${var}` 进行拼接。"
+    },
+    {
+      "id": 7,
+      "name": "函数表达式",
+      "description": "优先使用函数表达式而不是函数声明。",
+      "pattern": "function\\s+\\w+\\(",
+      "severity": "LOW",
+      "weight": 20,
+      "suggestion": "建议使用函数表达式或箭头函数：const func = () => {}。"
+    },
+    {
+      "id": 8,
+      "name": "箭头函数",
+      "description": "回调函数优先使用箭头函数。",
+      "pattern": "\\.map\\(function\\(|\\.forEach\\(function\\(|\\.filter\\(function\\(",
+      "severity": "MEDIUM",
+      "weight": 60,
+      "suggestion": "建议使用箭头函数作为回调，保留上下文this。"
+    },
+    {
+      "id": 9,
+      "name": "严格等于",
+      "description": "使用 === 和 !== 而不是 == 和 !=",
+      "pattern": "\\s==\\s|\\s!=\\s",
+      "severity": "HIGH",
+      "weight": 80,
+      "suggestion": "建议使用 === 和 !== 避免类型转换带来的隐患。"
+    },
+    {
+      "id": 10,
+      "name": "Switch语句Braces",
+      "description": "Switch case中如果声明变量，必须使用大括号。",
+      "pattern": "case\\s+.*:\\s*(let|const|function|class)\\s+",
+      "severity": "MEDIUM",
+      "weight": 50,
+      "suggestion": "建议在case语句块中使用大括号 {} 创建词法作用域。"
+    },
+    {
+      "id": 11,
+      "name": "命名规范-驼峰",
+      "description": "变量和函数名使用camelCase。",
+      "pattern": "(const|let|var)\\s+([A-Z][a-zA-Z0-9]*|_\\w+)\\s*=",
+      "severity": "MEDIUM",
+      "weight": 60,
+      "suggestion": "建议变量和函数名使用camelCase，常量使用UPPER_CASE，类使用PascalCase。"
+    },
+    {
+      "id": 12,
+      "name": "命名规范-类",
+      "description": "类名使用PascalCase。",
+      "pattern": "class\\s+[a-z][a-zA-Z0-9]*",
+      "severity": "MEDIUM",
+      "weight": 60,
+      "suggestion": "建议类名使用PascalCase。"
+    },
+    {
+      "id": 13,
+      "name": "Console使用",
+      "description": "生产环境避免使用console.log。",
+      "pattern": "console\\.log\\(",
+      "severity": "LOW",
+      "weight": 30,
+      "suggestion": "建议在生产环境移除console.log，或使用专用日志库。"
+    },
+    {
+      "id": 14,
+      "name": "分号使用",
+      "description": "语句结尾必须加分号。",
+      "pattern": "(const|let|var|return|throw|break|continue).*[^;{}]\\s*$",
+      "severity": "LOW",
+      "weight": 40,
+      "suggestion": "建议显式添加分号，避免ASI（自动分号插入）带来的潜在问题。"
+    }
+  ]
+}

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>知识库列表 - CodeGuardian AI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+</head>
+<body>
+    <div class="admin-container">
+        <!-- 左侧导航栏 -->
+        <aside class="sidebar">
+            <div class="logo"><i class="fas fa-shield-alt"></i></div>
+            <ul class="sidebar-menu">
+                <li><a href="/dashboard" title="仪表盘"><i class="fas fa-chart-pie"></i></a></li>
+                <li th:if="${canReview or canQuery}"><a href="/review" title="搜索"><i class="fas fa-search"></i></a></li>
+                <li th:if="${canQuery}"><a href="/review/reports" title="任务列表"><i class="fas fa-file-lines"></i></a></li>
+                <li th:if="${canAdmin}"><a href="/admin/users" title="权限管理"><i class="fas fa-user-shield"></i></a></li>
+                <li th:if="${canAdmin}"><a href="/admin/knowledge" title="知识库管理"><i class="fas fa-book"></i></a></li>
+                <li th:if="${canConfig}"><a href="/admin/settings" title="设置"><i class="fas fa-cog"></i></a></li>
+            </ul>
+        </aside>
+
+        <!-- 主内容区域 -->
+        <main class="main-content">
+            <!-- 顶部栏 -->
+            <header class="top-header">
+                <h1 class="page-title">知识库管理</h1>
+                <div class="user-section">
+                    <div class="user-info">
+                        <span class="user-label" th:text="${roleName ?: '系统管理员'}">系统管理员</span>
+                        <span class="username" th:text="${username ?: 'ADMIN'}">ADMIN</span>
+                    </div>
+                    <div class="user-avatar" id="user-avatar" th:text="${avatarChar ?: '系'}">系</div>
+                    <!-- 简单的登出按钮 -->
+                    <a href="/logout" class="logout-btn" style="margin-left: 10px; text-decoration: none; color: #666;">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </a>
+                </div>
+            </header>
+
+            <!-- 内容区域容器 -->
+            <div class="content-wrapper">
+                <!-- 二级菜单面板 -->
+                <aside class="submenu-panel">
+                    <nav class="submenu-nav">
+                        <a href="/admin/knowledge" class="submenu-item">
+                            <i class="fas fa-file-alt"></i>
+                            <span>文档管理</span>
+                        </a>
+                        <a href="/admin/knowledge/bases" class="submenu-item active">
+                            <i class="fas fa-database"></i>
+                            <span>知识库列表</span>
+                        </a>
+                    </nav>
+                </aside>
+
+                <div class="content-panel">
+                    <div class="content-area">
+                        <div class="content-window">
+                            <div class="page-header">
+                                <h2 class="content-title">知识库列表</h2>
+                            </div>
+
+                            <div class="table-container">
+                                <table class="user-table">
+                                    <thead>
+                                        <tr>
+                                            <th>知识库名称</th>
+                                            <th>描述</th>
+                                            <th>文档数量</th>
+                                            <th>创建时间</th>
+                                            <th>状态</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>
+                                                <i class="fas fa-server" style="color: #3498db; margin-right: 5px;"></i>
+                                                <span th:text="${kb.name}">默认知识库</span>
+                                            </td>
+                                            <td th:text="${kb.description}">系统默认的向量知识库</td>
+                                            <td>
+                                                <span class="status-tag active" th:text="${kb.documentCount} + ' 篇文档'">0</span>
+                                            </td>
+                                            <td th:text="${#temporals.format(kb.createTime, 'yyyy-MM-dd HH:mm')}">2023-01-01</td>
+                                            <td>
+                                                <span class="status-tag active">启用</span>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

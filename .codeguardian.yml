@@ -1,0 +1,19 @@
+qualityGate:
+  blockOn: CRITICAL
+  requireGrounding: true
+  requireProofBundle: true
+  requireAuditChain: true
+  ragMode: business-rag
+
+cicd:
+  diffOnly: true
+
+paths:
+  include:
+    - src/main/java/**
+    - src/main/resources/templates/**
+    - src/main/resources/static/**
+  exclude:
+    - target/**
+    - .git/**
+    - .trellis/**

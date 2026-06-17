@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>代码审查 - CodeGuardian AI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <link rel="stylesheet" th:href="@{/css/review.css?v=2.4}">
+</head>
+<body>
+    <div class="review-container">
+        <!-- 左侧导航栏 -->
+        <aside class="sidebar">
+            <div class="logo"><i class="fas fa-shield-alt"></i></div>
+            <ul class="sidebar-menu">
+                <li><a href="/dashboard" title="仪表盘"><i class="fas fa-chart-pie"></i></a></li>
+                <li th:if="${canReview or canQuery}"><a href="/review" class="active" title="搜索"><i class="fas fa-search"></i></a></li>
+                <li th:if="${canQuery}"><a href="/review/reports" title="任务列表"><i class="fas fa-file-lines"></i></a></li>
+                <li th:if="${canAdmin}"><a href="/admin/users" title="权限管理"><i class="fas fa-user-shield"></i></a></li>
+                <li th:if="${canAdmin}"><a href="/admin/knowledge" title="知识库管理"><i class="fas fa-book"></i></a></li>
+                <li th:if="${canConfig}"><a href="/admin/settings" title="设置"><i class="fas fa-cog"></i></a></li>
+            </ul>
+        </aside>
+
+        <!-- 主内容区域 -->
+        <main class="main-content">
+            <!-- 顶部标题栏 -->
+            <header class="top-header">
+                <h1 class="page-title">代码审查</h1>
+                <div class="user-section">
+                    <button class="logout-btn" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i> 登出
+                    </button>
+                </div>
+            </header>
+
+            <!-- 内容区域 -->
+            <div class="content-area">
+                <!-- 中间面板：代码编辑器 -->
+                <div class="editor-panel" id="editorPanel">
+                    <div class="editor-controls">
+                        <select class="code-type-select" id="codeTypeSelect">
+                            <option value="snippet">代码片段</option>
+                            <option value="file">单个文件</option>
+                            <option value="directory">指定目录</option>
+                            <option value="project">整个项目</option>
+                            <option value="git">Git项目</option>
+                        </select>
+                        <div class="rules-only-wrapper" style="display: flex; align-items: center; margin-left: 10px;">
+                            <input type="checkbox" id="rulesOnlyCheckbox" style="margin-right: 5px;">
+                            <label for="rulesOnlyCheckbox" style="font-size: 14px; color: var(--text-color); cursor: pointer;">仅规则审查</label>
+                        </div>
+                        <div class="agent-mode-wrapper" id="agentModeWrapper" style="display: none; align-items: center; margin-left: 10px;">
+                            <input type="checkbox" id="agentModeCheckbox" style="margin-right: 5px;">
+                            <label for="agentModeCheckbox" style="font-size: 14px; color: var(--text-color); cursor: pointer;">多 Agent 审查</label>
+                        </div>
+                        <select class="model-select" id="modelSelect" title="选择AI模型" style="display: none;" th:if="${hasAvailableModelProviders}">
+                            <option th:each="provider : ${availableModelProviders}"
+                                    th:value="${provider.code}"
+                                    th:selected="${provider == defaultModelProvider}"
+                                    th:text="${provider.displayName}">
+                                模型
+                            </option>
+                        </select>
+                        <select class="template-select" id="templateSelect" title="选择规范模板" style="margin-left: 10px; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; background-color: var(--bg-color); color: var(--text-color);">
+                            <option value="ALIBABA" selected>阿里巴巴Java规范</option>
+                            <option value="GOOGLE">Google Java规范</option>
+                            <option value="AIRBNB">Airbnb JS/TS规范</option>
+                            <option value="PEP8">PEP8 Python规范</option>
+                        </select>
+                        <div class="rag-enhancement-wrapper" id="ragEnhancementWrapper" style="display: none; align-items: center; margin-left: 10px;">
+                            <input type="checkbox" id="ragEnhancementCheckbox" style="margin-right: 5px;" checked>
+                            <label for="ragEnhancementCheckbox" style="font-size: 14px; color: var(--text-color); cursor: pointer;">RAG增强</label>
+                        </div>
+                        <button class="start-review-btn" id="startReviewBtn" onclick="startReview()">
+                            <i class="fas fa-play"></i> 开始审查
+                        </button>
+                        <button class="configure-git-btn" id="configureGitBtn" onclick="showGitConfigModal()" style="display: none;">
+                            <i class="fas fa-cog"></i> 配置Git项目
+                        </button>
+                    </div>
+                    <div class="task-control-bar" id="taskControlBar" style="display: none;">
+                        <div class="task-control-meta">
+                            <span class="task-id-pill" id="taskIdPill">Task #--</span>
+                            <span class="task-status-badge pending" id="taskStatusBadge">待处理</span>
+                            <span class="task-message" id="taskStatusMessage"></span>
+                        </div>
+                        <div class="task-control-actions">
+                            <button class="task-action-btn cancel" id="cancelTaskBtn" onclick="cancelCurrentTask()" disabled title="取消任务">
+                                <i class="fas fa-ban"></i> 取消
+                            </button>
+                            <button class="task-action-btn retry" id="retryTaskBtn" onclick="retryCurrentTask()" disabled title="重试任务">
+                                <i class="fas fa-redo"></i> 重试
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 代码片段编辑器 -->
+                    <div class="code-editor-area" id="codeEditorArea">
+                        <p class="editor-hint">在左侧编辑器中输入或粘贴代码，然后点击"开始审查"。</p>
+                        <div class="code-editor-wrapper" style="position: relative;">
+                            <button class="sample-code-btn" onclick="loadRiskyAgentDebateSample()" title="加载 Agent 辩论测试样例" style="position: absolute; right: 180px; top: 10px; z-index: 10; padding: 5px 10px; background-color: #16a34a; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                <i class="fas fa-people-arrows"></i> Agent 辩论样例
+                            </button>
+                            <button class="sample-code-btn" onclick="loadSampleCode()" title="加载测试用例" style="position: absolute; right: 80px; top: 10px; z-index: 10; padding: 5px 10px; background-color: var(--secondary-color); color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                <i class="fas fa-bug"></i> 测试用例
+                            </button>
+                            <button class="clear-editor-btn" onclick="clearEditor()" title="清空代码">
+                                <i class="fas fa-times"></i> 清空
+                            </button>
+                            <div class="code-editor-container">
+                                <div class="line-numbers" id="lineNumbers"></div>
+                                <pre class="code-editor-pre"><code class="language-java code-editor" id="codeEditor" contenteditable="true" spellcheck="false"></code></pre>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 文件选择区域 -->
+                    <div class="file-select-area" id="fileSelectArea" style="display: none;">
+                        <div class="drop-zone" id="fileDropZone">
+                            <p class="drop-hint">拖拽单个文件到此</p>
+                            <p class="drop-hint-secondary">或点击下方按钮选择文件</p>
+                            <div class="file-icon">
+                                <i class="fas fa-file-code"></i>
+                            </div>
+                            <div class="drop-zone-buttons">
+                                <button class="select-file-btn" onclick="selectFile()">
+                                    选择文件
+                                </button>
+                                <button class="clear-btn" onclick="clearFile()">
+                                    清空
+                                </button>
+                            </div>
+                        </div>
+                        <span class="selection-status" id="fileStatus">未选择文件</span>
+                        <input type="file" id="fileInput" style="display: none;" onchange="handleFileSelect(event)">
+                    </div>
+                    
+                    <!-- 目录选择区域 -->
+                    <div class="directory-select-area" id="directorySelectArea" style="display: none;">
+                        <div class="server-root-option" id="serverRootOption" style="display: none; width: 100%; flex-direction: column; align-items: center; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px dashed var(--border-color);">
+                            <p style="margin-bottom: 10px; color: var(--text-color);">检测到已配置服务器端项目根目录</p>
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                <code id="serverRootPath" style="background: var(--bg-color); padding: 5px 10px; border-radius: 4px; border: 1px solid var(--border-color);"></code>
+                            </div>
+                            <button class="btn-primary" onclick="useServerRoot()" style="padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                                <i class="fas fa-server"></i> 使用此目录进行审查
+                            </button>
+                            <p style="margin-top: 15px; font-size: 12px; color: var(--text-secondary-color);">或者上传本地文件：</p>
+                        </div>
+
+                        <div class="drop-zone" id="directoryDropZone">
+                            <p class="drop-hint" id="directoryHint">拖拽目录到此</p>
+                            <p class="drop-hint-secondary" id="directoryHintSecondary">或点击下方按钮选择目录</p>
+                            <div class="directory-icon">
+                                <i class="fas fa-folder"></i>
+                            </div>
+                            <div class="drop-zone-buttons">
+                                <button class="select-directory-btn" id="selectDirectoryBtn" onclick="selectDirectory()">
+                                    选择目录
+                                </button>
+                                <button class="clear-btn" onclick="clearDirectory()">
+                                    清空
+                                </button>
+                            </div>
+                        </div>
+                        <div class="directory-content-wrapper" id="directoryContentWrapper" style="display: none;">
+                            <!-- 左侧文件树 -->
+                            <div class="file-tree-container" id="fileTreeContainer">
+                                <div class="file-tree-header">
+                                    <span class="file-tree-title" id="fileTreeTitle">文件结构</span>
+                                    <button class="clear-btn" onclick="clearDirectory()">
+                                        清空
+                                    </button>
+                                </div>
+                                <div class="file-tree-content" id="fileTreeContent">
+                                    <!-- 文件树将在这里动态生成 -->
+                                </div>
+                                <!-- 右边框拖拽区域 -->
+                                <div class="file-tree-resize-handle" id="fileTreeResizeHandle"></div>
+                            </div>
+                            <!-- 右侧代码编辑器 -->
+                            <div class="directory-code-editor-area" id="directoryCodeEditorArea">
+                                <div class="directory-editor-header">
+                                <span class="directory-editor-title" id="directoryEditorTitle">代码预览</span>
+                                <span class="git-info-display" id="gitInfoDisplay"></span>
+                            </div>
+                                <div class="code-editor-wrapper">
+                                    <div class="code-editor-container">
+                                        <div class="line-numbers" id="directoryLineNumbers"></div>
+                                        <pre class="code-editor-pre"><code class="language-java code-editor" id="directoryCodeEditor" contenteditable="true" spellcheck="false"></code></pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <span class="selection-status" id="directoryStatus">未选择</span>
+                        <!-- 下载进度条 -->
+                        <div class="download-progress-container" id="downloadProgressContainer" style="display: none;">
+                            <div class="download-progress-bar">
+                                <div class="download-progress-fill" id="downloadProgressFill"></div>
+                            </div>
+                            <div class="download-progress-text" id="downloadProgressText">正在下载...</div>
+                        </div>
+                        <input type="file" id="directoryInput" webkitdirectory directory multiple style="display: none;" onchange="handleDirectorySelect(event)">
+                    </div>
+                </div>
+
+                <!-- 拖动调整手柄 -->
+                <div class="editor-resize-handle" id="editorResizeHandle"></div>
+
+                <!-- 右侧面板：审查结果和问题详情 -->
+                <div class="results-panel" id="resultsPanel">
+                    <!-- 审查结果区域 -->
+                    <div class="results-section">
+                        <div class="results-header">
+                            <h2 class="results-title">审查结果</h2>
+                            <button class="generate-report-btn" id="generateReportBtn" onclick="generateReport()" disabled>
+                                <i class="fas fa-file-alt"></i> 生成报告
+                            </button>
+                        </div>
+                        <div class="results-content" id="resultsContent">
+                            <!-- 默认为空，审查后显示问题列表 -->
+                        </div>
+                    </div>
+
+                    <!-- 问题详情区域 -->
+                    <div class="details-section">
+                        <h2 class="details-title">问题详情</h2>
+                        <p class="details-hint">点击上方列表中的问题以查看详情。</p>
+                        <div class="details-content" id="detailsContent">
+                            <!-- 问题详情将在这里动态加载 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Git配置弹窗 -->
+    <div class="modal-overlay" id="gitConfigModal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">配置Git项目</h2>
+                <button class="modal-close-btn" onclick="closeGitConfigModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Git仓库地址 <span style="color: var(--text-secondary-color); font-size: 12px;">(必填)</span></label>
+                    <input type="text" class="form-input" id="gitUrlInput" placeholder="https://github.com/user/repo.git" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">用户名 <span style="color: var(--text-secondary-color); font-size: 12px;">(可选，私有仓库需要)</span></label>
+                    <input type="text" class="form-input" id="gitUsernameInput" placeholder="公开仓库无需填写" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">密码/Token <span style="color: var(--text-secondary-color); font-size: 12px;">(可选，私有仓库需要)</span></label>
+                    <input type="password" class="form-input" id="gitPasswordInput" placeholder="公开仓库无需填写" />
+                </div>
+                <div style="padding: 12px; background-color: var(--hover-bg); border-radius: 6px; margin-top: 16px;">
+                    <p style="margin: 0; font-size: 13px; color: var(--text-secondary-color); line-height: 1.5;">
+                        <i class="fas fa-info-circle" style="margin-right: 6px;"></i>
+                        <strong>提示：</strong>公开的开源项目无需填写用户名和密码，直接输入Git仓库地址即可。只有私有仓库或需要认证的仓库才需要填写用户名和密码/Token。
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeGitConfigModal()">取消</button>
+                <button class="btn-primary" onclick="saveGitConfig()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 隐藏配置项 -->
+    <input type="hidden" id="projectRootConfig" th:value="${projectRoot}">
+    <input type="hidden" id="includePathsConfig" th:value="${includePaths}">
+    <input type="hidden" id="excludePathsConfig" th:value="${excludePaths}">
+    <input type="hidden" id="maxIssuesConfig" th:value="${maxIssues}">
+    <input type="hidden" id="ruleStandardConfig" th:value="${ruleStandard}">
+    <input type="hidden" id="hasAvailableModelProvidersConfig" th:value="${hasAvailableModelProviders}">
+    <input type="hidden" id="defaultModelProviderConfig" th:value="${defaultModelProvider}">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-java.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    <script th:src="@{/js/http.js?v=2.0}"></script>
+    <script th:src="@{/js/review.js?v=2.6}"></script>
+</body>
+</html>

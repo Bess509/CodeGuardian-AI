@@ -1,0 +1,932 @@
+/* 权限管理页面样式 - 与dashboard页面左侧菜单一致 */
+
+:root {
+    --bg-color: #0d1117;
+    --sidebar-bg: #161b22;
+    --primary-color: #58a6ff;
+    --text-color: #c9d1d9;
+    --text-secondary-color: #8b949e;
+    --border-color: #30363d;
+    --header-bg: #161b22;
+    --card-bg: #161b22;
+    --hover-bg: #21262d;
+    --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-family);
+    margin: 0;
+    padding: 0;
+    display: flex;
+    height: 100vh;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    overflow: hidden;
+}
+
+/* 主容器 */
+.admin-container {
+    display: flex;
+    width: 100%;
+    height: 100vh;
+}
+
+/* 左侧导航栏 - 与dashboard一致 */
+.sidebar {
+    width: 60px;
+    background-color: var(--sidebar-bg);
+    padding: 15px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border-right: 1px solid var(--border-color);
+    transition: width 0.3s ease;
+    position: relative;
+}
+
+/* 左侧紫色指示条 */
+.sidebar::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 3px;
+    height: 100%;
+    background: linear-gradient(180deg, #9333EA 0%, #7C3AED 100%);
+    z-index: 1;
+}
+
+.logo {
+    font-size: 24px;
+    color: var(--primary-color);
+    margin-bottom: 30px;
+    position: relative;
+    z-index: 2;
+}
+
+.sidebar-menu {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    width: 100%;
+    position: relative;
+    z-index: 2;
+}
+
+.sidebar-menu a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 50px;
+    text-decoration: none;
+    color: var(--text-secondary-color);
+    transition: background-color 0.3s, color 0.3s;
+    position: relative;
+}
+
+.sidebar-menu a:hover, .sidebar-menu a.active {
+    background-color: var(--hover-bg);
+    color: white;
+}
+
+.sidebar-menu a.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 60%;
+    background-color: var(--primary-color);
+    border-radius: 0 4px 4px 0;
+}
+
+.sidebar-menu a i {
+    font-size: 20px;
+}
+
+/* 主内容区 */
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-color);
+    overflow: hidden;
+}
+
+/* 顶部栏 - 与dashboard一致 */
+.top-header {
+    padding: 10px 25px;
+    background-color: var(--header-bg);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 60px;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+
+/* 内容区域容器 */
+.content-wrapper {
+    flex: 1;
+    display: flex;
+    gap: 12px;
+    padding: 8px;
+    overflow: hidden;
+    min-height: 0;
+    background-color: transparent;
+    align-items: stretch;
+}
+
+.page-title {
+    margin: 0;
+    font-size: 1.5em;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.user-section {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.user-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+
+.user-label {
+    font-size: 12px;
+    color: var(--text-secondary-color);
+}
+
+.username {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.logout-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-color);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.logout-btn:hover {
+    background-color: var(--hover-bg);
+    border-color: var(--primary-color);
+}
+
+/* 二级菜单面板 */
+.submenu-panel {
+    width: 200px;
+    background-color: var(--sidebar-bg);
+    display: flex;
+    flex-direction: column;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    flex-shrink: 0;
+    overflow: hidden;
+    height: 100%;
+    margin-left: 4px;
+    margin-right: 4px;
+}
+
+.submenu-nav {
+    flex: 1;
+    padding: 0 0 12px 0;
+    overflow-y: auto;
+}
+
+/* 内容面板 */
+.content-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: transparent;
+    overflow: hidden;
+    min-width: 0;
+    height: 100%;
+}
+
+.submenu-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    color: var(--text-secondary-color);
+    text-decoration: none;
+    font-size: 14px;
+    transition: all 0.2s;
+    border-left: 3px solid transparent;
+}
+
+.submenu-item:hover {
+    color: var(--text-color);
+    background-color: var(--hover-bg);
+}
+
+.submenu-item.active {
+    color: var(--primary-color);
+    background-color: var(--hover-bg);
+    border-left-color: var(--primary-color);
+}
+
+.submenu-item i {
+    font-size: 16px;
+    width: 20px;
+    text-align: center;
+}
+
+/* 内容区域 */
+.content-area {
+    flex: 1;
+    padding: 0;
+    /* overflow: hidden; Removed to allow content to show properly */
+    box-sizing: border-box;
+    margin: 0;
+    background-color: transparent;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* 内容标题 */
+.content-title {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: var(--primary-color);
+    margin: 0;
+    padding: 0;
+}
+
+/* 内容窗口 */
+.content-window {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 16px;
+    min-height: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+/* 角色管理页面头部 */
+.roles-page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.add-role-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.add-role-btn:hover {
+    background-color: #4a9eff;
+}
+
+/* 角色卡片网格 */
+.roles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+}
+
+/* 角色卡片 */
+.role-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.role-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+}
+
+.role-name {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: var(--primary-color);
+    margin: 0;
+}
+
+.role-code {
+    font-size: 0.85em;
+    color: var(--text-secondary-color);
+    font-weight: 500;
+    font-family: 'Courier New', monospace;
+}
+
+.role-description {
+    font-size: 14px;
+    color: var(--text-color);
+    margin: 0;
+    line-height: 1.6;
+}
+
+.role-permissions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.permission-tag {
+    display: inline-block;
+    padding: 4px 12px;
+    background-color: var(--hover-bg);
+    color: var(--text-secondary-color);
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    font-family: 'Courier New', monospace;
+}
+
+.role-card-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.role-edit-btn,
+.role-assign-btn,
+.role-delete-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.role-edit-btn {
+    background-color: transparent;
+    color: var(--text-color);
+}
+
+.role-edit-btn:hover {
+    background-color: var(--hover-bg);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.role-assign-btn {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.role-assign-btn:hover {
+    background-color: #4a9eff;
+}
+
+.role-delete-btn {
+    background-color: transparent;
+    color: #ff6b6b;
+    border-color: #ff6b6b;
+}
+
+.role-delete-btn:hover {
+    background-color: #ff6b6b;
+    color: white;
+    border-color: #4a9eff;
+}
+
+/* 权限卡片网格 */
+.permissions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+/* 权限卡片 */
+.permission-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.permission-name {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: var(--primary-color);
+    margin: 0;
+}
+
+.permission-code {
+    font-size: 0.85em;
+    color: var(--text-secondary-color);
+    font-weight: 500;
+    font-family: 'Courier New', monospace;
+}
+
+.permission-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    background-color: var(--hover-bg);
+    border-radius: 6px;
+}
+
+.permission-resource,
+.permission-action {
+    font-size: 13px;
+    color: var(--text-color);
+    line-height: 1.6;
+}
+
+.permission-description {
+    font-size: 14px;
+    color: var(--text-color);
+    margin: 0;
+    line-height: 1.6;
+}
+
+/* 页面头部 */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.add-user-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.add-user-btn:hover {
+    background-color: #4a9eff;
+}
+
+.add-user-btn span {
+    font-size: 18px;
+    font-weight: 600;
+}
+
+/* 搜索和筛选区域 */
+.search-section {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.search-input {
+    flex: 0;
+    width: 400px;
+    min-width: 200px;
+    max-width: 400px;
+    padding: 10px 16px;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-color);
+    font-size: 14px;
+}
+
+.search-input::placeholder {
+    color: var(--text-secondary-color);
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.filter-select {
+    padding: 10px 16px;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-color);
+    font-size: 14px;
+    cursor: pointer;
+    min-width: 120px;
+}
+
+.filter-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.query-btn,
+.reset-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.query-btn {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.query-btn:hover {
+    background-color: #4a9eff;
+}
+
+.reset-btn {
+    background-color: var(--card-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+.reset-btn:hover {
+    background-color: var(--hover-bg);
+    border-color: var(--primary-color);
+}
+
+/* 表格容器 */
+.table-container {
+    background-color: var(--card-bg);
+    border-radius: 8px;
+    overflow: auto;
+    margin-bottom: 8px;
+    border: 1px solid var(--border-color);
+    flex: 1;
+    min-height: 0;
+}
+
+.user-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.user-table thead {
+    background-color: var(--hover-bg);
+}
+
+.user-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary-color);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.user-table td {
+    padding: 12px 16px;
+    font-size: 14px;
+    color: var(--text-color);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.user-table tbody tr:hover {
+    background-color: var(--hover-bg);
+}
+
+/* 角色标签 */
+.role-tag {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    margin-right: 8px;
+}
+
+.role-tag.admin {
+    background-color: #dc2626;
+    color: #ffffff;
+}
+
+.role-tag.reviewer {
+    background-color: #ea580c;
+    color: #ffffff;
+}
+
+.role-tag.viewer {
+    background-color: #2563eb;
+    color: #ffffff;
+}
+
+/* 状态标签 */
+.status-tag {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.status-tag.active {
+    background-color: #16a34a;
+    color: #ffffff;
+}
+
+.status-tag.inactive {
+    background-color: #6b6b6b;
+    color: #ffffff;
+}
+
+.status-tag.locked {
+    background-color: #dc2626;
+    color: #ffffff;
+}
+
+/* 操作按钮 */
+.action-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.action-btn {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.edit-btn {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.edit-btn:hover {
+    background-color: #4a9eff;
+}
+
+.delete-btn {
+    background-color: #dc2626;
+    color: #ffffff;
+}
+
+.delete-btn:hover {
+    background-color: #b91c1c;
+}
+
+/* 分页 */
+.pagination {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+    padding-top: 6px;
+    flex-shrink: 0;
+}
+
+.page-btn {
+    padding: 6px 12px;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-color);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.page-btn:hover:not(:disabled):not(.disabled) {
+    background-color: var(--hover-bg);
+    border-color: var(--primary-color);
+}
+
+.page-btn:disabled, .page-btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.page-info {
+    font-size: 13px;
+    color: var(--text-secondary-color);
+}
+
+/* 模态框 */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background-color: var(--card-bg);
+    border-radius: 8px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary-color);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.modal-close:hover {
+    background-color: var(--hover-bg);
+    color: var(--text-color);
+}
+
+.modal-body {
+    padding: 24px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-color);
+    margin-bottom: 8px;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 10px 16px;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-color);
+    font-size: 14px;
+    font-family: var(--font-family);
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+#roleCheckboxes {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.role-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.role-checkbox input[type="checkbox"] {
+    width: auto;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 20px 24px;
+    border-top: 1px solid var(--border-color);
+}
+
+.btn-cancel,
+.btn-submit {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-cancel {
+    background-color: var(--card-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+.btn-cancel:hover {
+    background-color: var(--hover-bg);
+    border-color: var(--border-color);
+}
+
+.btn-submit {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.btn-submit:hover {
+    background-color: #4a9eff;
+}

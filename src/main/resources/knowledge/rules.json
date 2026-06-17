@@ -1,0 +1,30 @@
+[
+  {
+    "id": "java-npe-001",
+    "title": "避免空指针异常",
+    "category": "BUG",
+    "content": "在调用对象方法前未检查对象是否为null，导致NullPointerException。",
+    "solution": "使用Optional类或在调用前显式检查null。\n\n示例：\n// 错误\nreturn user.getName();\n\n// 正确\nreturn Optional.ofNullable(user).map(User::getName).orElse(\"Unknown\");"
+  },
+  {
+    "id": "java-sql-injection-001",
+    "title": "SQL注入风险",
+    "category": "SECURITY",
+    "content": "直接拼接字符串构建SQL查询语句，容易受到SQL注入攻击。",
+    "solution": "使用预编译语句（PreparedStatement）或ORM框架的参数绑定功能。\n\n示例：\n// 错误\nString sql = \"SELECT * FROM users WHERE name = '\" + name + \"'\";\n\n// 正确\nString sql = \"SELECT * FROM users WHERE name = ?\";"
+  },
+  {
+    "id": "java-resource-leak-001",
+    "title": "资源未关闭导致泄漏",
+    "category": "PERFORMANCE",
+    "content": "打开IO流、数据库连接等资源后，在异常发生时未正确关闭，导致资源泄漏。",
+    "solution": "使用try-with-resources语句自动关闭资源。\n\n示例：\n// 正确\ntry (FileInputStream fis = new FileInputStream(\"file.txt\")) {\n    // 读取文件\n}"
+  },
+  {
+    "id": "java-concurrent-hashmap-001",
+    "title": "并发集合使用不当",
+    "category": "BUG",
+    "content": "在多线程环境下使用HashMap而不是ConcurrentHashMap，可能导致死循环或数据丢失。",
+    "solution": "在多线程环境中使用ConcurrentHashMap。\n\n示例：\nMap<String, String> map = new ConcurrentHashMap<>();"
+  }
+]

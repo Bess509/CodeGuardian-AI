@@ -1,0 +1,60 @@
+*.classpath
+*.project
+*.iml
+*.factorypath
+
+# Build output
+target/
+out/
+bin/
+
+# IDE and local agent workspaces
+.idea/
+.vscode/
+.claude/
+.cursor/
+.trellis/
+.codegraph/
+
+# Runtime logs and dumps
+logs/
+*.log
+hs_err_pid*.log
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Local documentation/work notes that may contain machine-specific details
+docs/
+setup.md
+
+# Generated experiment/output artifacts
+output_*.json
+tools/rag_eval/runs/
+tools/rag_eval/**/__pycache__/
+
+# Database dumps/backups. Keep schema and seed scripts, but never commit live exports.
+database/*dump*.sql
+database/*backup*.sql
+database/*.dump
+database/init_data.sql
+database/20260315/
+
+# Secrets and local overrides
+.env
+.env.*
+!.env.example
+application-local.yml
+src/main/resources/application-local.yml
+src/main/resources/application-secret.yml
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# OS files
+*.DS_Store
+Thumbs.db

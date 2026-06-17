@@ -1,0 +1,132 @@
+{
+  "name": "GOOGLE",
+  "description": "Google Java Style Guide，强调代码清晰度、一致性和可读性。",
+  "rules": [
+    {
+      "id": 1,
+      "name": "列宽限制",
+      "description": "Java代码的列宽限制为100个字符。",
+      "pattern": "^.{101,}$",
+      "severity": "LOW",
+      "weight": 30,
+      "suggestion": "建议将长行拆分为多行，以提高可读性。"
+    },
+    {
+      "id": 2,
+      "name": "禁止通配符导入",
+      "description": "禁止使用通配符导入（wildcard imports），不管是静态导入还是普通导入。",
+      "pattern": "import\\s+.*\\*;",
+      "severity": "MEDIUM",
+      "weight": 50,
+      "suggestion": "建议明确导入所需的每个类，避免命名冲突和依赖不明确。"
+    },
+    {
+      "id": 3,
+      "name": "重载方法分组",
+      "description": "重载的方法应该放在一起，中间不应插入其他方法。",
+      "pattern": "public\\s+\\w+\\s+(\\w+)\\([^)]*\\)[\\s\\S]*?public\\s+\\w+\\s+(?!\\1)\\w+\\([^)]*\\)[\\s\\S]*?public\\s+\\w+\\s+\\1\\([^)]*\\)",
+      "severity": "LOW",
+      "weight": 20,
+      "suggestion": "建议将重载的方法放在一起，便于阅读。"
+    },
+    {
+      "id": 4,
+      "name": "类命名规范",
+      "description": "类名必须使用UpperCamelCase风格。",
+      "pattern": "class\\s+[a-z][a-zA-Z0-9]*",
+      "severity": "MEDIUM",
+      "weight": 60,
+      "suggestion": "类名应遵循UpperCamelCase，如MyClass。"
+    },
+    {
+      "id": 5,
+      "name": "方法命名规范",
+      "description": "方法名必须使用lowerCamelCase风格。",
+      "pattern": "public\\s+\\w+\\s+[A-Z][a-zA-Z0-9]*\\(",
+      "severity": "MEDIUM",
+      "weight": 60,
+      "suggestion": "方法名应遵循lowerCamelCase，如myMethod。"
+    },
+    {
+      "id": 6,
+      "name": "常量命名规范",
+      "description": "常量命名全部大写，单词间用下划线隔开。",
+      "pattern": "static\\s+final\\s+[a-zA-Z0-9_]+\\s+[a-z][a-zA-Z0-9_]*\\s*=",
+      "severity": "MEDIUM",
+      "weight": 60,
+      "suggestion": "常量应使用CONSTANT_CASE，如MAX_COUNT。"
+    },
+    {
+      "id": 7,
+      "name": "大括号使用",
+      "description": "大括号用于if, else, for, do, while语句，即使只有一条语句（K&R风格）。",
+      "pattern": "(if|else|for|while|do)\\s*\\([^)]*\\)\\s*[^\\{\\s]",
+      "severity": "MEDIUM",
+      "weight": 50,
+      "suggestion": "建议始终使用大括号，即使只有一行代码。"
+    },
+    {
+      "id": 8,
+      "name": "数组声明",
+      "description": "数组括号应该在类型后面，而不是变量名后面。",
+      "pattern": "\\w+\\s+\\w+\\[\\]",
+      "severity": "LOW",
+      "weight": 30,
+      "suggestion": "建议使用String[] args而不是String args[]。"
+    },
+    {
+      "id": 9,
+      "name": "Switch Default",
+      "description": "Switch语句必须包含default分支。",
+      "pattern": "switch\\s*\\([\\s\\S]*?\\)\\s*\\{(?![\\s\\S]*\\bdefault\\b)",
+      "severity": "MEDIUM",
+      "weight": 50,
+      "suggestion": "建议在switch语句中包含default分支。"
+    },
+    {
+      "id": 10,
+      "name": "Fall-through注释",
+      "description": "Switch case如果穿透（fall-through），必须有注释说明。",
+      "pattern": "case\\s+.*:[\\s\\S]*?(?<!break;|return;|throw.*;|continue;)\\s*case",
+      "severity": "LOW",
+      "weight": 40,
+      "suggestion": "建议显式添加// fall through注释，或使用break。"
+    },
+    {
+      "id": 11,
+      "name": "修饰符顺序",
+      "description": "类和成员修饰符应遵循Java语言规范推荐的顺序。",
+      "pattern": "(final\\s+public|static\\s+public|final\\s+private|static\\s+private|final\\s+protected|static\\s+protected)",
+      "severity": "LOW",
+      "weight": 20,
+      "suggestion": "建议顺序：public/protected/private abstract static final transient volatile synchronized native strictfp。"
+    },
+    {
+      "id": 12,
+      "name": "异常捕获",
+      "description": "不要捕获泛型的Exception，除非是顶层处理。",
+      "pattern": "catch\\s*\\(\\s*Exception\\s+\\w+\\s*\\)",
+      "severity": "LOW",
+      "weight": 30,
+      "suggestion": "建议捕获具体的异常类型，而不是通用的Exception。"
+    },
+    {
+      "id": 13,
+      "name": "空Catch块",
+      "description": "不要保留空的catch块。",
+      "pattern": "catch\\s*\\([^)]*\\)\\s*\\{\\s*\\}",
+      "severity": "MEDIUM",
+      "weight": 50,
+      "suggestion": "建议至少记录日志或添加注释说明为何忽略异常。"
+    },
+    {
+      "id": 14,
+      "name": "避免使用Finalizers",
+      "description": "禁止重写Object.finalize。",
+      "pattern": "void\\s+finalize\\(\\)",
+      "severity": "HIGH",
+      "weight": 80,
+      "suggestion": "建议避免使用finalize()，使用try-with-resources或手动清理资源。"
+    }
+  ]
+}

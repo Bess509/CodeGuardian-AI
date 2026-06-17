@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户管理 - CodeGuardian AI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+</head>
+<body>
+    <div class="admin-container">
+        <!-- 左侧导航栏 -->
+        <aside class="sidebar">
+            <div class="logo"><i class="fas fa-shield-alt"></i></div>
+            <ul class="sidebar-menu">
+                <li><a href="/dashboard" title="仪表盘"><i class="fas fa-chart-pie"></i></a></li>
+                <li th:if="${canReview or canQuery}"><a href="/review" title="搜索"><i class="fas fa-search"></i></a></li>
+                <li th:if="${canQuery}"><a href="/review/reports" title="任务列表"><i class="fas fa-file-lines"></i></a></li>
+                <li th:if="${canAdmin}"><a href="/admin/users" class="active" title="权限管理"><i class="fas fa-user-shield"></i></a></li>
+                <li th:if="${canAdmin}"><a href="/admin/knowledge" title="知识库管理"><i class="fas fa-book"></i></a></li>
+                <li th:if="${canConfig}"><a href="/admin/settings" title="设置"><i class="fas fa-cog"></i></a></li>
+            </ul>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 顶部栏 -->
+            <header class="top-header">
+                <h1 class="page-title">权限管理</h1>
+                <div class="user-section">
+                    <div class="user-info">
+                        <span class="user-label" th:text="${roleName ?: '系统管理员'}">系统管理员</span>
+                        <span class="username" th:text="${username ?: 'ADMIN'}">ADMIN</span>
+                    </div>
+                    <div class="user-avatar" id="user-avatar" th:text="${avatarChar ?: '系'}">系</div>
+                    <button class="logout-btn" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i> 登出
+                    </button>
+                </div>
+            </header>
+
+            <!-- 内容区域容器 -->
+            <div class="content-wrapper">
+                <!-- 二级菜单面板 -->
+                <aside class="submenu-panel">
+                    <nav class="submenu-nav">
+                        <a th:if="${canAdmin}" href="/admin/users" class="submenu-item active">
+                            <i class="fas fa-users"></i>
+                            <span>用户管理</span>
+                        </a>
+                        <a th:if="${canAdmin}" href="/admin/roles" class="submenu-item">
+                            <i class="fas fa-user-tag"></i>
+                            <span>角色管理</span>
+                        </a>
+                        <a th:if="${canConfig}" href="/admin/permissions" class="submenu-item">
+                            <i class="fas fa-key"></i>
+                            <span>权限列表</span>
+                        </a>
+                    </nav>
+                </aside>
+
+                <!-- 内容区域 -->
+                <div class="content-panel">
+                    <!-- 内容区域 -->
+                    <div class="content-area">
+                        <div class="content-window">
+                            <div class="page-header">
+                                <h2 class="content-title">用户管理</h2>
+                                <button class="add-user-btn" onclick="showAddUserModal()">
+                                    <span>+</span> 添加用户
+                                </button>
+                            </div>
+
+                            <!-- 搜索和筛选 -->
+                            <div class="search-section">
+                                <input 
+                                    type="text" 
+                                    id="searchInput" 
+                                    class="search-input" 
+                                    placeholder="搜索用户名、邮箱..."
+                                    onkeyup="handleSearch(event)">
+                                <select id="statusFilter" class="filter-select" onchange="loadUsers()">
+                                    <option value="">全部状态</option>
+                                    <option value="0">激活</option>
+                                    <option value="1">未激活</option>
+                                    <option value="2">锁定</option>
+                                </select>
+                                <select id="roleFilter" class="filter-select" onchange="loadUsers()">
+                                    <option value="">全部角色</option>
+                                </select>
+                                <button class="query-btn" onclick="loadUsers()">查询</button>
+                                <button class="reset-btn" onclick="resetFilters()">重置</button>
+                            </div>
+
+                            <!-- 用户表格 -->
+                            <div class="table-container">
+                                <table class="user-table">
+                                    <thead>
+                                        <tr>
+                                            <th>用户名</th>
+                                            <th>邮箱</th>
+                                            <th>真实姓名</th>
+                                            <th>角色</th>
+                                            <th>状态</th>
+                                            <th>注册时间</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="userTableBody">
+                                        <!-- 动态加载 -->
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- 分页 -->
+                            <div class="pagination">
+                                <button class="page-btn" id="prevBtn" onclick="changePage(-1)">上一页</button>
+                                <span class="page-info" id="pageInfo">第1/1页 (共0条)</span>
+                                <button class="page-btn" id="nextBtn" onclick="changePage(1)">下一页</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 添加/编辑用户模态框 -->
+    <div id="userModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">添加用户</h2>
+                <button class="modal-close" onclick="closeUserModal()">×</button>
+            </div>
+            <form id="userForm" onsubmit="saveUser(event)">
+                <div class="modal-body">
+                    <input type="hidden" id="userId">
+                    <div class="form-group">
+                        <label>用户名</label>
+                        <input type="text" id="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label>邮箱</label>
+                        <input type="email" id="email" required>
+                    </div>
+                    <div class="form-group" id="passwordGroup">
+                        <label>密码</label>
+                        <input type="password" id="password" required>
+                    </div>
+                    <div class="form-group">
+                        <label>真实姓名</label>
+                        <input type="text" id="realName">
+                    </div>
+                    <div class="form-group">
+                        <label>状态</label>
+                        <select id="status">
+                            <option value="0">激活</option>
+                            <option value="1">未激活</option>
+                            <option value="2">锁定</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>角色</label>
+                        <div id="roleCheckboxes"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-cancel" onclick="closeUserModal()">取消</button>
+                    <button type="submit" class="btn-submit">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script th:src="@{/js/http.js}"></script>
+    <script th:src="@{/js/admin.js}"></script>
+</body>
+</html>

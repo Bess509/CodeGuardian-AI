@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>角色管理 - CodeGuardian AI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+</head>
+<body>
+    <div class="admin-container">
+        <!-- 左侧导航栏 -->
+        <aside class="sidebar">
+            <div class="logo"><i class="fas fa-shield-alt"></i></div>
+            <ul class="sidebar-menu">
+                <li><a href="/dashboard" title="仪表盘"><i class="fas fa-chart-pie"></i></a></li>
+                <li th:if="${canReview or canQuery}"><a href="/review" title="搜索"><i class="fas fa-search"></i></a></li>
+                <li th:if="${canQuery}"><a href="/review/reports" title="任务列表"><i class="fas fa-file-lines"></i></a></li>
+                <li th:if="${canAdmin}"><a href="/admin/users" class="active" title="权限管理"><i class="fas fa-user-shield"></i></a></li>
+                <li th:if="${canAdmin}"><a href="/admin/knowledge" title="知识库管理"><i class="fas fa-book"></i></a></li>
+                <li th:if="${canConfig}"><a href="/admin/settings" title="设置"><i class="fas fa-cog"></i></a></li>
+            </ul>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 顶部栏 -->
+            <header class="top-header">
+                <h1 class="page-title">权限管理</h1>
+                <div class="user-section">
+                    <div class="user-info">
+                        <span class="user-label" th:text="${roleName ?: '系统管理员'}">系统管理员</span>
+                        <span class="username" th:text="${username ?: 'ADMIN'}">ADMIN</span>
+                    </div>
+                    <div class="user-avatar" id="user-avatar" th:text="${avatarChar ?: '系'}">系</div>
+                    <button class="logout-btn" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i> 登出
+                    </button>
+                </div>
+            </header>
+
+            <!-- 内容区域容器 -->
+            <div class="content-wrapper">
+                <!-- 二级菜单面板 -->
+                <aside class="submenu-panel">
+                    <nav class="submenu-nav">
+                        <a th:if="${canAdmin}" href="/admin/users" class="submenu-item">
+                            <i class="fas fa-users"></i>
+                            <span>用户管理</span>
+                        </a>
+                        <a th:if="${canAdmin}" href="/admin/roles" class="submenu-item active">
+                            <i class="fas fa-user-tag"></i>
+                            <span>角色管理</span>
+                        </a>
+                        <a th:if="${canConfig}" href="/admin/permissions" class="submenu-item">
+                            <i class="fas fa-key"></i>
+                            <span>权限列表</span>
+                        </a>
+                    </nav>
+                </aside>
+
+                <!-- 内容区域 -->
+                <div class="content-panel">
+                    <div class="content-area">
+                        <div class="content-window">
+                            <div class="roles-page-header">
+                                <h2 class="content-title">角色管理</h2>
+                                <button class="add-role-btn" onclick="showAddRoleModal()">
+                                    <i class="fas fa-plus"></i> 添加角色
+                                </button>
+                            </div>
+                            <div id="rolesContent" class="roles-grid">
+                                <!-- 动态加载 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 添加/编辑角色模态框 -->
+    <div id="roleModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="roleModalTitle">添加角色</h2>
+                <button class="modal-close" onclick="closeRoleModal()">×</button>
+            </div>
+            <form id="roleForm" onsubmit="saveRole(event)">
+                <div class="modal-body">
+                    <input type="hidden" id="roleId">
+                    <div class="form-group">
+                        <label>角色代码</label>
+                        <input type="text" id="roleCode" required>
+                    </div>
+                    <div class="form-group">
+                        <label>角色名称</label>
+                        <input type="text" id="roleName" required>
+                    </div>
+                    <div class="form-group">
+                        <label>角色描述</label>
+                        <textarea id="roleDescription" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>状态</label>
+                        <select id="roleStatus">
+                            <option value="0">激活</option>
+                            <option value="1">未激活</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-cancel" onclick="closeRoleModal()">取消</button>
+                    <button type="submit" class="btn-submit">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 分配权限模态框 -->
+    <div id="permissionModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="permissionModalTitle">分配权限</h2>
+                <button class="modal-close" onclick="closePermissionModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="permissionCheckboxes"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-cancel" onclick="closePermissionModal()">取消</button>
+                <button type="button" class="btn-submit" onclick="savePermissions()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script th:src="@{/js/admin.js}"></script>
+</body>
+</html>
