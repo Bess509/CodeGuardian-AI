@@ -128,7 +128,7 @@ public class KnowledgeBaseServiceTest {
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(vectorChunk));
 
         List<RetrievedKnowledgeChunk> chunks = knowledgeBaseService.searchSnippetChunks(
-                "Language: Java\nRisk Keywords: CamelCase", 3);
+                "Language: Java\nRule Categories: CODE_STYLE\nRisk Keywords: CamelCase", 3);
 
         assertEquals(1, chunks.size());
         RetrievedKnowledgeChunk chunk = chunks.get(0);
@@ -136,7 +136,11 @@ public class KnowledgeBaseServiceTest {
         assertEquals(1, chunk.getMetadata().get("vectorRank"));
         assertEquals(1, chunk.getMetadata().get("bm25Rank"));
         assertTrue(Boolean.TRUE.equals(chunk.getMetadata().get("metadataLanguageMatched")));
+        assertTrue(Boolean.TRUE.equals(chunk.getMetadata().get("metadataCategoryMatched")));
         assertTrue(Boolean.TRUE.equals(chunk.getMetadata().get("keywordMatched")));
+        assertEquals((1.0d / 61) + (1.0d / 61) + 0.003d + 0.006d + 0.008d,
+                (Double) chunk.getMetadata().get("fusedScore"),
+                0.000001d);
     }
 
     @Test

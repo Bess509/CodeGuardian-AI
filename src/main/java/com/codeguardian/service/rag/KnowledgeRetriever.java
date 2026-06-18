@@ -21,6 +21,10 @@ import java.util.stream.Collectors;
 @Slf4j
 final class KnowledgeRetriever {
 
+    private static final double LANGUAGE_MATCH_BOOST = 0.003d;
+    private static final double CATEGORY_MATCH_BOOST = 0.006d;
+    private static final double KEYWORD_MATCH_BOOST = 0.008d;
+
     private final VectorStore vectorStore;
     private final Bm25Index bm25Index;
     private final List<KnowledgeDocument> documents;
@@ -281,13 +285,13 @@ final class KnowledgeRetriever {
         boolean categoryMatched = profile.matchesCategory(candidate);
         boolean keywordMatched = profile.matchesKeyword(candidate);
         if (languageMatched) {
-            score += 0.05;
+            score += LANGUAGE_MATCH_BOOST;
         }
         if (categoryMatched) {
-            score += 0.08;
+            score += CATEGORY_MATCH_BOOST;
         }
         if (keywordMatched) {
-            score += 0.08;
+            score += KEYWORD_MATCH_BOOST;
         }
         candidate.fusedScore = score;
         candidate.retrievalMode = candidate.vectorRank != null && candidate.bm25Rank != null
