@@ -99,6 +99,17 @@ app:
       python-command: ${RAG_PARSER_PYTHON:python}
       script-path: ${RAG_PARSER_SCRIPT:scripts/rag_parse_document.py}
       timeout-seconds: ${RAG_PARSER_TIMEOUT_SECONDS:180}
+    reranker:
+      enabled: ${RAG_RERANKER_ENABLED:true}
+      endpoint: ${RAG_RERANKER_ENDPOINT:http://localhost:8081/rerank}
+      model-id: ${RAG_RERANKER_MODEL:BAAI/bge-reranker-base}
+      candidate-top-k: ${RAG_RERANKER_CANDIDATE_TOP_K:32}
+      timeout-millis: ${RAG_RERANKER_TIMEOUT_MS:1500}
+      max-query-chars: ${RAG_RERANKER_MAX_QUERY_CHARS:2200}
+      max-text-chars: ${RAG_RERANKER_MAX_TEXT_CHARS:2400}
+      raw-scores: ${RAG_RERANKER_RAW_SCORES:false}
+      cross-encoder-weight: ${RAG_RERANKER_CROSS_WEIGHT:0.85}
+      fusion-weight: ${RAG_RERANKER_FUSION_WEIGHT:0.15}
     
     # Ollama配置（用于本地DeepSeek）
     ollama:

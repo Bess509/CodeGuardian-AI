@@ -49,6 +49,10 @@ public class KnowledgeBaseService {
     private final MinioStorageService minioStorageService;
     private final DocumentParsingService documentParsingService;
     private final JdbcTemplate jdbcTemplate;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @org.springframework.context.annotation.Lazy
+    private RerankerClient rerankerClient;
+    private RagRerankerProperties rerankerProperties = new RagRerankerProperties();
     @org.springframework.beans.factory.annotation.Value("${app.rag.vectorize-on-startup:true}")
     private boolean vectorizeOnStartup;
     private volatile boolean startupVectorizationScheduled;
@@ -66,7 +70,14 @@ public class KnowledgeBaseService {
     }
 
     private KnowledgeRetriever retriever() {
-        return new KnowledgeRetriever(vectorStore, bm25Index, documents);
+        return new KnowledgeRetriever(vectorStore, bm25Index, documents, rerankerClient, rerankerProperties);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setRerankerProperties(RagRerankerProperties rerankerProperties) {
+        if (rerankerProperties != null) {
+            this.rerankerProperties = rerankerProperties;
+        }
     }
 
     @PostConstruct

@@ -5,13 +5,16 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -21,11 +24,23 @@ final class KnowledgeRetriever {
     private final VectorStore vectorStore;
     private final Bm25Index bm25Index;
     private final List<KnowledgeDocument> documents;
+    private final RerankerClient rerankerClient;
+    private final RagRerankerProperties rerankerProperties;
 
     KnowledgeRetriever(VectorStore vectorStore, Bm25Index bm25Index, List<KnowledgeDocument> documents) {
+        this(vectorStore, bm25Index, documents, null, null);
+    }
+
+    KnowledgeRetriever(VectorStore vectorStore,
+                       Bm25Index bm25Index,
+                       List<KnowledgeDocument> documents,
+                       RerankerClient rerankerClient,
+                       RagRerankerProperties rerankerProperties) {
         this.vectorStore = vectorStore;
         this.bm25Index = bm25Index;
         this.documents = documents != null ? documents : List.of();
+        this.rerankerClient = rerankerClient;
+        this.rerankerProperties = rerankerProperties != null ? rerankerProperties : new RagRerankerProperties();
     }
 
     List<KnowledgeDocument> search(String query, int topK) {
@@ -48,7 +63,7 @@ final class KnowledgeRetriever {
 
     List<RetrievedKnowledgeChunk> searchSnippetChunks(String query, int topK) {
         int requestedTopK = Math.max(1, topK);
-        int recallTopK = Math.max(requestedTopK * 2, requestedTopK);
+        int recallTopK = recallTopK(requestedTopK);
         SearchProfile profile = SearchProfile.from(query);
         Map<String, RetrievalCandidate> candidates = new LinkedHashMap<>();
 
@@ -63,11 +78,12 @@ final class KnowledgeRetriever {
         }
 
         candidates.values().forEach(candidate -> scoreCandidate(candidate, profile));
-        List<RetrievedKnowledgeChunk> chunks = candidates.values().stream()
-                .sorted(Comparator
-                        .comparingDouble((RetrievalCandidate c) -> c.fusedScore).reversed()
-                        .thenComparing(c -> c.vectorRank != null ? c.vectorRank : Integer.MAX_VALUE)
-                        .thenComparing(c -> c.bm25Rank != null ? c.bm25Rank : Integer.MAX_VALUE))
+        List<RetrievalCandidate> preRanked = candidates.values().stream()
+                .sorted(fusionComparator())
+                .limit(candidateTopK(requestedTopK, candidates.size()))
+                .collect(Collectors.toList());
+        List<RetrievalCandidate> selected = rerankCandidates(query, preRanked, requestedTopK);
+        List<RetrievedKnowledgeChunk> chunks = selected.stream()
                 .limit(requestedTopK)
                 .map(RetrievalCandidate::toChunk)
                 .collect(Collectors.toList());
@@ -78,6 +94,113 @@ final class KnowledgeRetriever {
         log.info("RAG snippet search fused results: vector={}, bm25={}, selected={}",
                 vectorResults.size(), bm25Indices.size(), chunks.size());
         return chunks;
+    }
+
+    private int recallTopK(int requestedTopK) {
+        int defaultRecallTopK = Math.max(requestedTopK * 2, requestedTopK);
+        if (!rerankerEnabled()) {
+            return defaultRecallTopK;
+        }
+        int rerankWindow = Math.max(requestedTopK, rerankerProperties.getCandidateTopK());
+        return Math.max(defaultRecallTopK, Math.min(rerankWindow, requestedTopK * 4));
+    }
+
+    private int candidateTopK(int requestedTopK, int available) {
+        if (!rerankerEnabled()) {
+            return requestedTopK;
+        }
+        int configured = Math.max(requestedTopK, rerankerProperties.getCandidateTopK());
+        return Math.max(requestedTopK, Math.min(configured, available));
+    }
+
+    private Comparator<RetrievalCandidate> fusionComparator() {
+        return Comparator
+                .comparingDouble((RetrievalCandidate c) -> c.fusedScore).reversed()
+                .thenComparing(c -> c.vectorRank != null ? c.vectorRank : Integer.MAX_VALUE)
+                .thenComparing(c -> c.bm25Rank != null ? c.bm25Rank : Integer.MAX_VALUE);
+    }
+
+    private List<RetrievalCandidate> rerankCandidates(String query,
+                                                      List<RetrievalCandidate> preRanked,
+                                                      int requestedTopK) {
+        if (!rerankerEnabled() || preRanked == null || preRanked.isEmpty()) {
+            return preRanked != null ? preRanked.stream().limit(requestedTopK).collect(Collectors.toList()) : List.of();
+        }
+        List<RetrievedKnowledgeChunk> chunks = preRanked.stream()
+                .map(RetrievalCandidate::toChunk)
+                .collect(Collectors.toList());
+        RerankResponse response = rerankerClient.rerank(query, chunks);
+        if (response == null || !response.hasResults()) {
+            return preRanked.stream().limit(requestedTopK).collect(Collectors.toList());
+        }
+
+        Map<Integer, RerankResult> resultsByIndex = response.results().stream()
+                .collect(Collectors.toMap(RerankResult::index, result -> result, (first, ignored) -> first));
+        double maxFusionScore = preRanked.stream()
+                .mapToDouble(candidate -> candidate.fusedScore)
+                .max()
+                .orElse(1.0d);
+        List<RetrievalCandidate> reranked = new ArrayList<>();
+        Set<Integer> scoredIndexes = new HashSet<>();
+        for (int i = 0; i < preRanked.size(); i++) {
+            RerankResult result = resultsByIndex.get(i);
+            if (result == null) {
+                continue;
+            }
+            RetrievalCandidate candidate = preRanked.get(i);
+            double fusionBeforeRerank = candidate.fusedScore;
+            double normalizedFusionScore = maxFusionScore > 0 ? fusionBeforeRerank / maxFusionScore : 0.0d;
+            double crossEncoderScore = normalizeCrossEncoderScore(result.score());
+            double finalScore = rerankerProperties.getCrossEncoderWeight() * crossEncoderScore
+                    + rerankerProperties.getFusionWeight() * normalizedFusionScore;
+
+            candidate.fusedScore = finalScore;
+            candidate.metadata.put("reranked", true);
+            candidate.metadata.put("reranker", "cross_encoder");
+            candidate.metadata.put("rerankerModel", response.model());
+            candidate.metadata.put("rerankerEndpoint", response.endpoint());
+            candidate.metadata.put("crossEncoderScore", result.score());
+            candidate.metadata.put("normalizedCrossEncoderScore", crossEncoderScore);
+            candidate.metadata.put("fusionScoreBeforeRerank", fusionBeforeRerank);
+            candidate.metadata.put("finalRerankScore", finalScore);
+            candidate.metadata.put("fusedScore", finalScore);
+            candidate.metadata.put("rerankCandidateCount", preRanked.size());
+            candidate.metadata.put("rerankInputIndex", i);
+            reranked.add(candidate);
+            scoredIndexes.add(i);
+        }
+
+        List<RetrievalCandidate> fallback = new ArrayList<>();
+        for (int i = 0; i < preRanked.size(); i++) {
+            if (!scoredIndexes.contains(i)) {
+                RetrievalCandidate candidate = preRanked.get(i);
+                candidate.metadata.put("reranked", false);
+                candidate.metadata.put("reranker", "cross_encoder");
+                candidate.metadata.put("rerankMissingScore", true);
+                fallback.add(candidate);
+            }
+        }
+        reranked.sort(fusionComparator());
+        fallback.sort(fusionComparator());
+        reranked.addAll(fallback);
+        return reranked.stream().limit(requestedTopK).collect(Collectors.toList());
+    }
+
+    private boolean rerankerEnabled() {
+        return rerankerClient != null && rerankerClient.isEnabled()
+                && rerankerProperties != null
+                && rerankerProperties.isEnabled();
+    }
+
+    private double normalizeCrossEncoderScore(double score) {
+        if (!rerankerProperties.isRawScores()) {
+            return clamp(score, 0.0d, 1.0d);
+        }
+        return 1.0d / (1.0d + Math.exp(-score));
+    }
+
+    private double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private List<Document> vectorSnippetResults(String query, int recallTopK) {

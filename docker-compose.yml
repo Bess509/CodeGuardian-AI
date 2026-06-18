@@ -1,7 +1,4 @@
-version: '3.8'
-
 services:
-  # PostgreSQL 数据库
   postgres:
     image: pgvector/pgvector:pg15
     container_name: code-guardian-postgres
@@ -17,7 +14,6 @@ services:
       - ./database/init_permissions.sql:/docker-entrypoint-initdb.d/02_init_permissions.sql
     restart: always
 
-  # Redis 缓存
   redis:
     image: redis:7
     container_name: code-guardian-redis
@@ -28,6 +24,17 @@ services:
       - redis_data:/data
     restart: always
 
+  reranker:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9
+    container_name: code-guardian-reranker
+    command: ["--model-id", "${RAG_RERANKER_MODEL:-BAAI/bge-reranker-base}"]
+    ports:
+      - "8081:80"
+    volumes:
+      - reranker_data:/data
+    restart: always
+
 volumes:
   postgres_data:
   redis_data:
+  reranker_data:
