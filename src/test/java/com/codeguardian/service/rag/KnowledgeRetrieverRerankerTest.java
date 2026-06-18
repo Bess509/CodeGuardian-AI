@@ -78,4 +78,32 @@ class KnowledgeRetrieverRerankerTest {
         assertTrue(Boolean.TRUE.equals(chunks.get(0).getMetadata().get("reranked")));
         assertTrue(chunks.get(0).getMetadata().containsKey("fusionScoreBeforeRerank"));
     }
+
+    @Test
+    void searchSnippetChunks_ShouldKeepMultipleVectorChunksFromSameDocument() {
+        KnowledgeDocument sourceDoc = KnowledgeDocument.builder()
+                .id("shared-doc")
+                .title("Security Guide")
+                .content("Long source document with multiple independent rules.")
+                .category("SECURITY")
+                .build();
+        Bm25Index bm25Index = new Bm25Index();
+
+        Document sqlChunk = new Document("shared-doc::chunk-1",
+                "RULE-SQL-001 Use PreparedStatement for SQL injection prevention.",
+                Map.of("source_doc_id", "shared-doc", "title", "Security Guide", "category", "SECURITY"));
+        Document secretChunk = new Document("shared-doc::chunk-2",
+                "RULE-SECRET-001 Load credentials from environment or a secret manager.",
+                Map.of("source_doc_id", "shared-doc", "title", "Security Guide", "category", "SECURITY"));
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(sqlChunk, secretChunk));
+
+        KnowledgeRetriever retriever = new KnowledgeRetriever(vectorStore, bm25Index, List.of(sourceDoc));
+
+        List<RetrievedKnowledgeChunk> chunks = retriever.searchSnippetChunks("SQL credentials", 2);
+
+        assertEquals(2, chunks.size());
+        assertEquals(List.of("shared-doc::chunk-1", "shared-doc::chunk-2"),
+                chunks.stream().map(RetrievedKnowledgeChunk::getChunkId).toList());
+        assertTrue(chunks.stream().allMatch(chunk -> "shared-doc".equals(chunk.getSourceDocumentId())));
+    }
 }

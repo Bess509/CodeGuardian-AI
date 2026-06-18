@@ -122,7 +122,7 @@ public class KnowledgeBaseServiceTest {
     }
 
     @Test
-    void searchSnippetChunks_ShouldFuseVectorAndBm25_WhenSameSourceMatchesBoth() {
+    void searchSnippetChunks_ShouldNotFuseVectorAndBm25_WhenDifferentChunksMatchSameSource() {
         Document vectorChunk = new Document("chunk1", "Use CamelCase for Java class names.",
                 Map.of("title", "Snippet Title", "source_doc_id", "doc1", "score", 0.91d));
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(vectorChunk));
@@ -130,17 +130,22 @@ public class KnowledgeBaseServiceTest {
         List<RetrievedKnowledgeChunk> chunks = knowledgeBaseService.searchSnippetChunks(
                 "Language: Java\nRule Categories: CODE_STYLE\nRisk Keywords: CamelCase", 3);
 
-        assertEquals(1, chunks.size());
-        RetrievedKnowledgeChunk chunk = chunks.get(0);
-        assertEquals("VECTOR_BM25_FUSED", chunk.getRetrievalMode());
-        assertEquals(1, chunk.getMetadata().get("vectorRank"));
-        assertEquals(1, chunk.getMetadata().get("bm25Rank"));
-        assertTrue(Boolean.TRUE.equals(chunk.getMetadata().get("metadataLanguageMatched")));
-        assertTrue(Boolean.TRUE.equals(chunk.getMetadata().get("metadataCategoryMatched")));
-        assertTrue(Boolean.TRUE.equals(chunk.getMetadata().get("keywordMatched")));
-        assertEquals((1.0d / 61) + (1.0d / 61) + 0.003d + 0.006d + 0.008d,
-                (Double) chunk.getMetadata().get("fusedScore"),
-                0.000001d);
+        assertEquals(2, chunks.size());
+        RetrievedKnowledgeChunk vectorResult = chunks.stream()
+                .filter(chunk -> "chunk1".equals(chunk.getChunkId()))
+                .findFirst()
+                .orElseThrow();
+        RetrievedKnowledgeChunk bm25Result = chunks.stream()
+                .filter(chunk -> "doc1".equals(chunk.getChunkId()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("VECTOR_ONLY", vectorResult.getRetrievalMode());
+        assertEquals("BM25_ONLY", bm25Result.getRetrievalMode());
+        assertEquals(1, vectorResult.getMetadata().get("vectorRank"));
+        assertEquals(1, bm25Result.getMetadata().get("bm25Rank"));
+        assertTrue(Boolean.TRUE.equals(vectorResult.getMetadata().get("metadataLanguageMatched")));
+        assertTrue(Boolean.TRUE.equals(vectorResult.getMetadata().get("metadataCategoryMatched")));
+        assertTrue(Boolean.TRUE.equals(vectorResult.getMetadata().get("keywordMatched")));
     }
 
     @Test

@@ -1,6 +1,9 @@
 package com.codeguardian.service.rag;
 
+import org.springframework.ai.document.Document;
+
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,29 +17,55 @@ class Bm25Index {
     private final Map<String, List<Integer>> invertedIndex = new HashMap<>();
     private final List<Map<String, Integer>> docTermFreqs = new ArrayList<>();
     private final List<Integer> docLengths = new ArrayList<>();
-    private int documentCount;
+    private final List<IndexedChunk> chunks = new ArrayList<>();
+    private int chunkCount;
     private double avgDocLength;
 
     void rebuild(List<KnowledgeDocument> documents) {
+        List<IndexedChunk> indexedChunks = documents != null
+                ? documents.stream().map(this::fromKnowledgeDocument).collect(Collectors.toList())
+                : List.of();
+        rebuildIndexedChunks(indexedChunks);
+    }
+
+    void rebuildChunks(List<Document> documents) {
+        List<IndexedChunk> indexedChunks = documents != null
+                ? documents.stream().map(this::fromSpringDocument).collect(Collectors.toList())
+                : List.of();
+        rebuildIndexedChunks(indexedChunks);
+    }
+
+    IndexedChunk get(Integer index) {
+        if (index == null || index < 0 || index >= chunks.size()) {
+            return null;
+        }
+        return chunks.get(index);
+    }
+
+    private void rebuildIndexedChunks(List<IndexedChunk> indexedChunks) {
         invertedIndex.clear();
         docTermFreqs.clear();
         docLengths.clear();
-        documentCount = documents != null ? documents.size() : 0;
+        chunks.clear();
+        if (indexedChunks != null) {
+            chunks.addAll(indexedChunks);
+        }
+        chunkCount = chunks.size();
         avgDocLength = 0;
 
-        if (documents == null || documents.isEmpty()) {
+        if (chunks.isEmpty()) {
             return;
         }
 
         long totalLength = 0;
-        for (int i = 0; i < documents.size(); i++) {
-            totalLength += add(documents.get(i), i);
+        for (int i = 0; i < chunks.size(); i++) {
+            totalLength += add(chunks.get(i), i);
         }
-        avgDocLength = (double) totalLength / documents.size();
+        avgDocLength = (double) totalLength / chunks.size();
     }
 
     List<Integer> search(String query, int topK) {
-        if (documentCount == 0 || avgDocLength <= 0) {
+        if (chunkCount == 0 || avgDocLength <= 0 || topK <= 0) {
             return List.of();
         }
         List<String> queryTerms = tokenize(query != null ? query.toLowerCase() : "");
@@ -47,7 +76,7 @@ class Bm25Index {
             if (docIndices == null) {
                 continue;
             }
-            double idf = Math.log(1 + (documentCount - docIndices.size() + 0.5) / (docIndices.size() + 0.5));
+            double idf = Math.log(1 + (chunkCount - docIndices.size() + 0.5) / (docIndices.size() + 0.5));
             for (Integer docIdx : docIndices) {
                 if (docIdx == null || docIdx < 0 || docIdx >= docTermFreqs.size()) {
                     continue;
@@ -67,9 +96,14 @@ class Bm25Index {
                 .collect(Collectors.toList());
     }
 
-    private long add(KnowledgeDocument doc, int index) {
-        String text = ((doc.getTitle() != null ? doc.getTitle() : "") + " "
-                + (doc.getContent() != null ? doc.getContent() : "")).toLowerCase();
+    private long add(IndexedChunk chunk, int index) {
+        String text = String.join(" ",
+                safe(chunk.title()),
+                safe(metadataValue(chunk.metadata(), "heading_path", "headingPath")),
+                safe(metadataValue(chunk.metadata(), "rule_ids", "ruleIds")),
+                safe(chunk.category()),
+                safe(chunk.content())
+        ).toLowerCase();
         List<String> terms = tokenize(text);
 
         Map<String, Integer> freqs = new HashMap<>();
@@ -86,6 +120,64 @@ class Bm25Index {
         return terms.size();
     }
 
+    private IndexedChunk fromKnowledgeDocument(KnowledgeDocument doc) {
+        Map<String, Object> metadata = doc.getMetadata() != null
+                ? new LinkedHashMap<>(doc.getMetadata())
+                : new LinkedHashMap<>();
+        String chunkId = firstNonBlank(
+                stringValue(metadata.get("chunk_id")),
+                stringValue(metadata.get("chunkId")),
+                doc.getId()
+        );
+        String sourceDocumentId = firstNonBlank(
+                stringValue(metadata.get("source_doc_id")),
+                stringValue(metadata.get("document_id")),
+                stringValue(metadata.get("sourceDocumentId")),
+                doc.getId()
+        );
+        metadata.putIfAbsent("chunk_id", chunkId);
+        metadata.putIfAbsent("source_doc_id", sourceDocumentId);
+        metadata.putIfAbsent("title", doc.getTitle());
+        metadata.putIfAbsent("category", doc.getCategory());
+        return new IndexedChunk(
+                chunkId,
+                sourceDocumentId,
+                doc.getTitle(),
+                doc.getContent(),
+                doc.getCategory(),
+                metadata
+        );
+    }
+
+    private IndexedChunk fromSpringDocument(Document document) {
+        Map<String, Object> metadata = document.getMetadata() != null
+                ? new LinkedHashMap<>(document.getMetadata())
+                : new LinkedHashMap<>();
+        String chunkId = firstNonBlank(
+                stringValue(metadata.get("chunk_id")),
+                stringValue(metadata.get("chunkId")),
+                document.getId()
+        );
+        String sourceDocumentId = firstNonBlank(
+                stringValue(metadata.get("source_doc_id")),
+                stringValue(metadata.get("document_id")),
+                stringValue(metadata.get("sourceDocumentId")),
+                chunkId
+        );
+        String title = stringValue(metadata.get("title"));
+        String category = stringValue(metadata.get("category"));
+        metadata.putIfAbsent("chunk_id", chunkId);
+        metadata.putIfAbsent("source_doc_id", sourceDocumentId);
+        return new IndexedChunk(
+                chunkId,
+                sourceDocumentId,
+                title,
+                document.getContent(),
+                category,
+                metadata
+        );
+    }
+
     private List<String> tokenize(String text) {
         List<String> tokens = new ArrayList<>();
         java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("[\\u4e00-\\u9fa5]|[a-zA-Z0-9]+");
@@ -94,5 +186,46 @@ class Bm25Index {
             tokens.add(matcher.group());
         }
         return tokens;
+    }
+
+    private String metadataValue(Map<String, Object> metadata, String... keys) {
+        if (metadata == null || keys == null) {
+            return "";
+        }
+        for (String key : keys) {
+            Object value = metadata.get(key);
+            if (value != null) {
+                return String.valueOf(value);
+            }
+        }
+        return "";
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return "";
+    }
+
+    private String stringValue(Object value) {
+        return value != null ? String.valueOf(value) : null;
+    }
+
+    private String safe(String value) {
+        return value != null ? value : "";
+    }
+
+    record IndexedChunk(String chunkId,
+                        String sourceDocumentId,
+                        String title,
+                        String content,
+                        String category,
+                        Map<String, Object> metadata) {
     }
 }

@@ -225,7 +225,17 @@ final class KnowledgeRetriever {
             Map<String, Object> metadata = vectorDoc.getMetadata() != null
                     ? new LinkedHashMap<>(vectorDoc.getMetadata())
                     : new LinkedHashMap<>();
-            String sourceDocId = stringValue(metadata.getOrDefault("source_doc_id", vectorDoc.getId()));
+            String chunkId = firstNonBlank(
+                    stringValue(metadata.get("chunk_id")),
+                    stringValue(metadata.get("chunkId")),
+                    vectorDoc.getId()
+            );
+            String sourceDocId = firstNonBlank(
+                    stringValue(metadata.get("source_doc_id")),
+                    stringValue(metadata.get("document_id")),
+                    stringValue(metadata.get("sourceDocumentId")),
+                    chunkId
+            );
             KnowledgeDocument sourceDoc = findDocById(sourceDocId);
             String title = firstNonBlank(stringValue(metadata.get("title")),
                     sourceDoc != null ? sourceDoc.getTitle() : null);
@@ -233,9 +243,15 @@ final class KnowledgeRetriever {
             if (content == null || content.trim().isEmpty()) {
                 continue;
             }
-            String key = candidateKey(sourceDocId, vectorDoc.getId());
+            metadata.putIfAbsent("chunk_id", chunkId);
+            metadata.putIfAbsent("source_doc_id", sourceDocId);
+            metadata.putIfAbsent("title", title);
+            if (sourceDoc != null) {
+                metadata.putIfAbsent("category", sourceDoc.getCategory());
+            }
+            String key = candidateKey(sourceDocId, chunkId);
             RetrievalCandidate candidate = candidates.computeIfAbsent(key,
-                    ignored -> RetrievalCandidate.fromVector(vectorDoc.getId(), sourceDocId, title, content, metadata));
+                    ignored -> RetrievalCandidate.fromVector(chunkId, sourceDocId, title, content, metadata));
             candidate.vectorRank = i + 1;
             candidate.vectorScore = doubleValue(metadata.get("score"));
             candidate.metadata.put("vectorRank", candidate.vectorRank);
@@ -247,28 +263,24 @@ final class KnowledgeRetriever {
 
     private void collectBm25Candidates(List<Integer> bm25Indices, Map<String, RetrievalCandidate> candidates) {
         for (int i = 0; i < bm25Indices.size(); i++) {
-            Integer docIndex = bm25Indices.get(i);
-            if (docIndex == null || docIndex < 0 || docIndex >= documents.size()) {
+            Integer resultIndex = bm25Indices.get(i);
+            Bm25Index.IndexedChunk indexedChunk = bm25Index.get(resultIndex);
+            if (indexedChunk == null) {
                 continue;
             }
-            KnowledgeDocument doc = documents.get(docIndex);
-            String content = RagTextSanitizer.clean(doc.getContent());
+            String content = RagTextSanitizer.clean(indexedChunk.content());
             if (content == null || content.trim().isEmpty()) {
                 continue;
             }
-            if (content.length() > 800) {
-                content = content.substring(0, 800) + "... (truncated)";
-            }
-            final String candidateContent = content;
-            String key = candidateKey(doc.getId(), doc.getId());
+            String key = candidateKey(indexedChunk.sourceDocumentId(), indexedChunk.chunkId());
             RetrievalCandidate candidate = candidates.computeIfAbsent(key,
-                    ignored -> RetrievalCandidate.fromDocument(doc, candidateContent));
+                    ignored -> RetrievalCandidate.fromBm25Chunk(indexedChunk));
+            if (candidate.content == null || candidate.content.isBlank()) {
+                candidate.content = content;
+            }
             candidate.bm25Rank = i + 1;
             candidate.metadata.put("bm25Rank", candidate.bm25Rank);
-            candidate.metadata.putIfAbsent("category", doc.getCategory());
-            if (doc.getMetadata() != null) {
-                candidate.metadata.putIfAbsent("documentMetadata", new LinkedHashMap<>(doc.getMetadata()));
-            }
+            candidate.metadata.putIfAbsent("category", indexedChunk.category());
         }
     }
 
@@ -317,8 +329,9 @@ final class KnowledgeRetriever {
         }
 
         for (int i = 0; i < bm25Indices.size(); i++) {
-            if (bm25Indices.get(i) < documents.size()) {
-                String id = documents.get(bm25Indices.get(i)).getId();
+            Bm25Index.IndexedChunk indexedChunk = bm25Index.get(bm25Indices.get(i));
+            if (indexedChunk != null) {
+                String id = indexedChunk.sourceDocumentId();
                 rrfScores.put(id, rrfScores.getOrDefault(id, 0.0) + 1.0 / (k + i + 1));
             }
         }
@@ -339,17 +352,22 @@ final class KnowledgeRetriever {
     }
 
     private String candidateKey(String sourceDocId, String chunkId) {
-        if (sourceDocId != null && !sourceDocId.isBlank()) {
-            return sourceDocId;
+        if (chunkId != null && !chunkId.isBlank()) {
+            return chunkId;
         }
-        return chunkId != null && !chunkId.isBlank() ? chunkId : UUID.randomUUID().toString();
+        return sourceDocId != null && !sourceDocId.isBlank() ? sourceDocId : UUID.randomUUID().toString();
     }
 
-    private String firstNonBlank(String first, String second) {
-        if (first != null && !first.isBlank()) {
-            return first;
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
         }
-        return second != null ? second : "";
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return "";
     }
 
     private String stringValue(Object value) {
