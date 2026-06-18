@@ -1,51 +1,43 @@
-# RAG Chunk-Level Redesign
+# RAG Chunk 级重构设计
 
-## Goal
+## 目标
 
-Upgrade RAG ingestion and retrieval from document-level behavior to chunk-level behavior.
-The system should preserve rule semantics, avoid large mixed-rule chunks, and ensure
-that vector search, BM25, reranking, prompt evidence, and audit metadata all refer to
-the same chunk identity.
+将 RAG 的摄取和检索从“文档级”升级为“chunk 级”。系统需要保留规则语义，避免过大的多规则混合 chunk，并确保向量检索、BM25、重排序、提示词证据和审计元数据都引用同一个 chunk 身份。
 
-This design addresses three current issues:
+本设计解决三个当前问题：
 
-- Rule-aware splitting depends too much on recognized keywords or IDs. When no rule
-  boundary is detected, a whole section can remain unsplit.
-- Fixed character limits can produce chunks that are too large for precise rule
-  grounding.
-- Retrieval currently mixes chunk-level vector results with document-level BM25 and
-  can merge multiple chunks from the same document into one candidate.
+- 规则感知切分过度依赖已识别的关键词或规则 ID。没有检测到规则边界时，整个章节可能不会继续切分。
+- 固定字符上限可能产生过大的 chunk，导致规则证据不够精确。
+- 当前检索混用了 chunk 级向量结果和文档级 BM25，并且可能把同一文档下的多个 chunk 合并为一个候选。
 
-## Scope
+## 范围
 
-In scope:
+本次范围包含：
 
-- Add a persisted `KnowledgeChunk` model.
-- Split documents into chunks using structure, rule boundaries, semantic boundaries,
-  and token-window fallback.
-- Index chunks in both vector store and BM25.
-- Merge retrieval candidates by `chunkId`, not by source document ID.
-- Rebuild all chunks for a document when the source content or chunking strategy is stale.
-- Add configuration and tests for chunking behavior.
+- 新增持久化的 `KnowledgeChunk` 模型。
+- 使用结构、规则边界、语义边界和 token 滑窗兜底切分文档。
+- 在向量库和 BM25 中都以 chunk 为单位建立索引。
+- 按 `chunkId` 合并检索候选，而不是按源文档 ID 合并。
+- 当源内容或切分策略过期时，重建该文档的全部 chunk。
+- 为切分行为增加配置和测试。
 
-Out of scope for the first implementation:
+第一版不包含：
 
-- Partial diff-based chunk updates.
-- UI screens for browsing chunks.
-- Replacing the existing document detail flow.
+- 基于 diff 的局部 chunk 更新。
+- 浏览 chunk 的 UI 页面。
+- 替换现有文档详情流程。
 
-## Data Model
+## 数据模型
 
-Keep `KnowledgeDocument` as the source document entity. Add `KnowledgeChunk` as the
-retrievable evidence entity.
+保留 `KnowledgeDocument` 作为源文档实体。新增 `KnowledgeChunk` 作为可检索的证据实体。
 
-Relationship:
+关系：
 
 ```text
 knowledge_document 1 -> N knowledge_chunk
 ```
 
-Suggested `knowledge_chunk` columns:
+建议的 `knowledge_chunk` 字段：
 
 ```text
 id                  varchar primary key
@@ -67,38 +59,37 @@ created_at           timestamp
 updated_at           timestamp
 ```
 
-Indexes:
+索引：
 
 ```text
 idx_knowledge_chunk_document_id
 idx_knowledge_chunk_strategy
-idx_knowledge_chunk_rule_ids      defer until rule-id filtering is implemented
-idx_knowledge_chunk_metadata      defer until metadata filtering is implemented
+idx_knowledge_chunk_rule_ids      等实现按规则 ID 过滤时再添加
+idx_knowledge_chunk_metadata      等实现按元数据过滤时再添加
 ```
 
-`KnowledgeDocument.content` remains the full source text for compatibility with
-existing document list/detail behavior.
+`KnowledgeDocument.content` 继续保留全文，以兼容现有文档列表和文档详情行为。
 
-## Chunk Identity
+## Chunk 身份
 
-Chunk IDs should be stable but change when the meaningful chunk content changes.
+Chunk ID 应该尽量稳定，但当有意义的 chunk 内容变化时也应该变化。
 
-Recommended key material:
+推荐的 ID 材料：
 
 ```text
 documentId + ":" + chunkIndex + ":" + charStart + ":" + contentHash
 ```
 
-The implementation can use UUID name generation over that material.
+实现上可以基于这些材料生成命名 UUID。
 
-This means:
+含义：
 
-- Same document, same strategy, same content, same chunk position: stable ID.
-- Updated document or changed chunk boundary: new ID.
+- 同一文档、同一策略、同一内容、同一 chunk 位置：ID 稳定。
+- 文档更新或 chunk 边界变化：生成新 ID。
 
-## Staleness Rules
+## 过期规则
 
-Each chunk stores:
+每个 chunk 存储：
 
 ```text
 source_content_hash = hash(document.content)
@@ -106,7 +97,7 @@ chunk_strategy = current strategy name/version
 chunk_config_hash = hash(chunking parameters)
 ```
 
-A document's chunks are stale when any of these conditions is true:
+满足任一条件时，文档的 chunks 视为过期：
 
 ```text
 no chunks exist for document
@@ -115,25 +106,23 @@ chunk.chunk_strategy != currentChunkStrategy
 chunk.chunk_config_hash != currentChunkConfigHash
 ```
 
-When stale, rebuild at document granularity:
+过期时按文档粒度重建：
 
 ```text
-1. Keep the KnowledgeDocument row.
-2. Delete all KnowledgeChunk rows for documentId.
-3. Delete all vector_store records whose metadata points to documentId.
-4. Split current document content with current configuration.
-5. Save new chunks.
-6. Add new chunks to the vector store.
-7. Refresh BM25 chunk index.
+1. 保留 KnowledgeDocument 记录。
+2. 删除 documentId 对应的所有 KnowledgeChunk 记录。
+3. 删除 metadata 指向 documentId 的所有 vector_store 记录。
+4. 使用当前配置切分当前文档内容。
+5. 保存新 chunks。
+6. 将新 chunks 写入向量库。
+7. 刷新 BM25 chunk 索引。
 ```
 
-Do not implement partial chunk diffing in the first version. It is too easy to leave
-stale vectors behind because char offsets, overlap, and chunk indexes can shift after
-a small document edit.
+第一版不要实现局部 chunk diff。一次小的文档编辑也可能导致 char offset、overlap 和 chunk index 全部偏移，局部更新很容易留下过期向量。
 
-## Configuration
+## 配置
 
-Add chunking properties:
+新增 chunking 配置：
 
 ```yaml
 app:
@@ -148,26 +137,19 @@ app:
       max-heading-length: 80
 ```
 
-Parameter meanings:
+参数含义：
 
-- `targetTokens`: preferred chunk size. The splitter tries to stay near this size
-  while preserving semantic boundaries.
-- `hardMaxTokens`: hard upper bound. Any block above this must be split further.
-- `overlapTokens`: context carried from one chunk to the next when splitting a long
-  block.
-- `minChunkTokens`: lower bound for standalone chunks. Smaller pieces should be merged
-  with adjacent compatible content when possible.
-- `maxRuleIdsPerChunk`: maximum number of rule IDs to merge into one normal chunk.
-  This prevents rule contamination.
+- `targetTokens`：首选 chunk 大小。切分器会尽量接近这个大小，同时保留语义边界。
+- `hardMaxTokens`：硬上限。任何超过该上限的块都必须继续切分。
+- `overlapTokens`：长块拆分时，相邻 chunk 之间携带的上下文 token 数。
+- `minChunkTokens`：独立 chunk 的下限。更小的片段应尽量与相邻且兼容的内容合并。
+- `maxRuleIdsPerChunk`：一个普通 chunk 最多合并的规则 ID 数，用来防止规则污染。
 
-`chunk_strategy` is the persisted strategy/version that generated a chunk. It only
-matters because chunks survive across restarts and deployments. The current code/config
-value is compared with the persisted value to decide whether old chunks can be reused.
+`chunk_strategy` 是生成 chunk 时持久化的策略/版本。它之所以有意义，是因为 chunk 会跨重启和部署长期存在。系统会把当前代码/配置中的值和持久化值比较，决定旧 chunk 是否可以复用。
 
-## Splitter Architecture
+## Splitter 架构
 
-Keep `StructuredDocumentChunker` as the public facade, but split responsibilities into
-smaller internal units:
+保留 `StructuredDocumentChunker` 作为公开门面，但将内部职责拆成更小的单元：
 
 ```text
 StructuredDocumentChunker
@@ -179,23 +161,21 @@ StructuredDocumentChunker
  -> ChunkMetadataBuilder
 ```
 
-Facade signature:
+门面签名：
 
 ```java
 List<KnowledgeChunk> split(KnowledgeDocument document, ChunkingProperties properties)
 ```
 
-If using Spring AI `Document` for vector store writing, convert `KnowledgeChunk` to
-`org.springframework.ai.document.Document` at the vector operation boundary.
+如果向量库写入仍使用 Spring AI `Document`，应在向量操作边界将 `KnowledgeChunk` 转换为 `org.springframework.ai.document.Document`。
 
-## Splitting Algorithm
+## 切分算法
 
 ### 1. Normalize
 
-Normalize line endings and excessive blank lines while preserving code blocks, lists,
-and tables.
+标准化换行和过多空行，同时保留代码块、列表和表格结构。
 
-Rules:
+规则：
 
 ```text
 \r\n -> \n
@@ -205,17 +185,17 @@ do not merge lines inside fenced code blocks
 do not break Markdown table rows
 ```
 
-The first version can use offsets based on normalized text and store:
+第一版可以使用基于标准化文本的 offset，并记录：
 
 ```text
 offset_basis = normalized_text
 ```
 
-### 2. Split Sections By Headings
+### 2. 按标题切分 Section
 
-Recognize headings before recognizing rules.
+先识别标题，再识别规则。
 
-Heading patterns:
+标题模式：
 
 ```text
 # / ## Markdown headings
@@ -225,7 +205,7 @@ Heading patterns:
 short all-caps English headings
 ```
 
-Avoid false positives:
+避免误判：
 
 ```text
 heading length <= maxHeadingLength
@@ -234,7 +214,7 @@ prefer lines surrounded by blank lines
 avoid ordinary sentence lines ending with full punctuation
 ```
 
-Output:
+输出：
 
 ```text
 Section {
@@ -245,11 +225,11 @@ Section {
 }
 ```
 
-### 3. Split Rule Blocks
+### 3. 切分 RuleBlock
 
-Within each section, detect rule starts.
+在每个 section 内检测规则起点。
 
-Strong ID patterns:
+强 ID 模式：
 
 ```text
 RULE-SQL-001
@@ -261,7 +241,7 @@ SEC-...
 SAFE-...
 ```
 
-Normative label patterns:
+规范标签模式：
 
 ```text
 【强制】
@@ -271,7 +251,7 @@ Normative label patterns:
 [Recommended]
 ```
 
-Natural-language rule patterns:
+自然语言规则模式：
 
 ```text
 规则1：
@@ -283,12 +263,11 @@ Natural-language rule patterns:
 修复建议：
 ```
 
-A rule block ends when the next rule start or next heading starts. If a section has
-no rule starts, send the section as an `unstructured_block` to semantic fallback.
+规则块在遇到下一条规则起点或下一个标题时结束。如果某个 section 没有任何规则起点，则把该 section 作为 `unstructured_block` 交给语义兜底层处理。
 
-### 4. Assemble Normal Chunks
+### 4. 组装普通 Chunks
 
-For small rule blocks:
+对于较小的规则块：
 
 ```text
 if block.tokens <= targetTokens:
@@ -299,7 +278,7 @@ if block.tokens <= targetTokens:
     combined rule ID count <= maxRuleIdsPerChunk
 ```
 
-For oversized blocks:
+对于过大的块：
 
 ```text
 if block.tokens > hardMaxTokens:
@@ -307,16 +286,15 @@ if block.tokens > hardMaxTokens:
   if still too large, split by token window
 ```
 
-Default target behavior:
+默认目标行为：
 
-- Most rule chunks should contain one rule ID.
-- Very short adjacent rules may share a chunk, up to `maxRuleIdsPerChunk`.
-- Code examples should remain with the nearest rule description or remediation text
-  when possible.
+- 大多数规则 chunk 只包含一个规则 ID。
+- 非常短且相邻的规则可以共享一个 chunk，但最多到 `maxRuleIdsPerChunk`。
+- 代码示例应尽量和最近的规则描述或修复建议保留在同一个 chunk 中。
 
-### 5. Semantic Boundary Fallback
+### 5. 语义边界兜底
 
-When rule boundaries are not detected, split using natural boundaries:
+当没有检测到规则边界时，使用自然边界切分：
 
 ```text
 blank-line paragraphs
@@ -328,14 +306,13 @@ semicolon/colon boundaries
 code line boundaries
 ```
 
-This is the key difference from the current behavior: missing rule keywords no longer
-means "do not split." It only means the splitter moves to lower-priority boundaries.
+这是和当前行为的关键区别：缺少规则关键词不再意味着“不切分”，只意味着切分器会继续退到优先级更低的边界。
 
-### 6. Token Window Fallback
+### 6. Token 滑窗兜底
 
-Token-window splitting is the final hard guarantee.
+Token 滑窗是最后的硬保证。
 
-Pseudo logic:
+伪逻辑：
 
 ```text
 start = 0
@@ -351,11 +328,11 @@ while start < tokens.size:
   start = max(end - overlapTokens, start + 1)
 ```
 
-Prefer ending at sentence, paragraph, list item, or code-block boundaries when possible.
+只要可能，优先在句子、段落、列表项或代码块边界结束。
 
-## Chunk Metadata
+## Chunk 元数据
 
-Every chunk should include:
+每个 chunk 至少包含：
 
 ```text
 chunk_id
@@ -376,7 +353,7 @@ parserStrategy
 category
 ```
 
-`split_reason` values:
+`split_reason` 取值：
 
 ```text
 heading
@@ -387,16 +364,15 @@ token_window
 merged_small_block
 ```
 
-This makes debugging much easier. If many chunks are created by `token_window`, rule
-boundary detection is probably missing important source patterns.
+这会显著降低排查难度。如果大量 chunks 都由 `token_window` 产生，说明规则边界检测很可能遗漏了重要的源文档模式。
 
-## Vector Store Integration
+## 向量库集成
 
-Vector store records should be chunk records.
+向量库记录应该是 chunk 记录。
 
-`Document.id` should be `KnowledgeChunk.id`.
+`Document.id` 应使用 `KnowledgeChunk.id`。
 
-Vector metadata should include:
+向量元数据应包含：
 
 ```text
 chunk_id
@@ -416,15 +392,13 @@ char_end
 split_reason
 ```
 
-Before rewriting chunks for a document, remove old vector records by document ID. If
-the Spring AI `VectorStore` abstraction does not expose deletion by metadata, use
-`JdbcTemplate` against the `vector_store` table.
+在为某个文档重写 chunks 前，需要先按文档 ID 删除旧向量记录。如果 Spring AI 的 `VectorStore` 抽象没有暴露按 metadata 删除的能力，则使用 `JdbcTemplate` 直接操作 `vector_store` 表。
 
-## BM25 Chunk Index
+## BM25 Chunk 索引
 
-Replace document-level BM25 with chunk-level BM25.
+用 chunk 级 BM25 替换文档级 BM25。
 
-New shape:
+新结构：
 
 ```java
 class Bm25ChunkIndex {
@@ -434,7 +408,7 @@ class Bm25ChunkIndex {
 }
 ```
 
-Indexed text should combine:
+索引文本应组合：
 
 ```text
 title
@@ -444,14 +418,13 @@ category
 content
 ```
 
-This allows queries containing rule IDs, categories, headings, or natural language to
-hit specific chunks.
+这样包含规则 ID、分类、标题或自然语言的 query 都可以命中特定 chunk。
 
-## Retrieval Fusion
+## 检索融合
 
-Retrieval should use chunk IDs as candidate identity.
+检索应使用 chunk ID 作为候选身份。
 
-Flow:
+流程：
 
 ```text
 query
@@ -463,7 +436,7 @@ query
  -> return RetrievedKnowledgeChunk list
 ```
 
-Candidate key:
+候选 key：
 
 ```java
 private String candidateKey(String sourceDocId, String chunkId) {
@@ -477,9 +450,9 @@ private String candidateKey(String sourceDocId, String chunkId) {
 }
 ```
 
-This prevents multiple chunks from the same document being collapsed into one result.
+这可以防止同一文档下的多个 chunks 被折叠成一个结果。
 
-Retrieval modes:
+检索模式：
 
 ```text
 VECTOR_ONLY
@@ -487,13 +460,13 @@ BM25_ONLY
 VECTOR_BM25_FUSED
 ```
 
-`VECTOR_BM25_FUSED` should only mean the same chunk was found by both retrieval paths.
+`VECTOR_BM25_FUSED` 只表示同一个 chunk 同时被两个检索通道命中。
 
-## Reranking
+## 重排序
 
-Reranker input should be chunk-level text, not a full document snippet.
+重排序输入应该是 chunk 级文本，而不是整篇文档片段。
 
-Suggested reranker text:
+建议的重排序文本：
 
 ```text
 Title: ...
@@ -504,24 +477,23 @@ Content:
 ...
 ```
 
-The existing `RAG_RERANKER_MAX_TEXT_CHARS` setting can still cap the rerank payload.
+现有 `RAG_RERANKER_MAX_TEXT_CHARS` 仍可用于限制重排序载荷。
 
-## Compatibility
+## 兼容性
 
-Keep `KnowledgeBaseService.search(String query, int topK)` for old callers by mapping
-top chunks back to unique `KnowledgeDocument` values.
+保留 `KnowledgeBaseService.search(String query, int topK)` 供旧调用方使用：它可以把 top chunks 映射回去重后的 `KnowledgeDocument`。
 
-Primary RAG flows should use:
+主要 RAG 流程应使用：
 
 ```java
 searchSnippetChunks(String query, int topK)
 ```
 
-and receive chunk-level `RetrievedKnowledgeChunk` records.
+并接收 chunk 级的 `RetrievedKnowledgeChunk` 记录。
 
-## Services And Repositories
+## 服务与 Repository
 
-Add:
+新增：
 
 ```text
 KnowledgeChunk
@@ -531,7 +503,7 @@ KnowledgeChunkService or KnowledgeChunkRebuildService
 Bm25ChunkIndex
 ```
 
-Update:
+更新：
 
 ```text
 StructuredDocumentChunker
@@ -543,26 +515,26 @@ TaskRagPackService if it assumes document-level details
 FindingRagEvidenceService only if metadata assumptions break
 ```
 
-Suggested service responsibilities:
+建议的服务职责：
 
 ```text
 KnowledgeBaseService
-  Owns document upload/update/delete and calls chunk rebuild service.
+  负责文档上传、更新、删除，并调用 chunk 重建服务。
 
 KnowledgeChunkRebuildService
-  Detects stale chunks, deletes old chunks/vectors, splits current content, saves chunks,
-  writes vectors, and rebuilds or updates BM25.
+  检测 stale chunks，删除旧 chunks/旧向量，切分当前内容，保存 chunks，
+  写入向量，并重建或更新 BM25。
 
 KnowledgeVectorOperations
-  Converts KnowledgeChunk to Spring AI Document and handles vector cleanup/write.
+  将 KnowledgeChunk 转换为 Spring AI Document，并处理向量清理/写入。
 
 KnowledgeRetriever
-  Searches vector and BM25 chunk indexes, fuses candidates, reranks, and returns chunks.
+  搜索向量和 BM25 chunk 索引，融合候选，重排序，并返回 chunks。
 ```
 
-## Upload And Update Flow
+## 上传与更新流程
 
-Document upload:
+文档上传：
 
 ```text
 parse file
@@ -571,7 +543,7 @@ rebuild chunks for document
 rebuild/update BM25 chunk index
 ```
 
-Document update:
+文档更新：
 
 ```text
 update KnowledgeDocument fields and content_hash
@@ -583,7 +555,7 @@ add new vectors
 refresh BM25 chunk index
 ```
 
-Document delete:
+文档删除：
 
 ```text
 delete KnowledgeDocument
@@ -592,9 +564,9 @@ delete vector records by documentId
 refresh BM25 chunk index
 ```
 
-## Startup Flow
+## 启动流程
 
-On startup:
+应用启动时：
 
 ```text
 load documents
@@ -606,45 +578,42 @@ rebuild BM25 chunk index
 vectorize missing chunks when app.rag.vectorize-on-startup is enabled
 ```
 
-The startup path should be careful not to trigger expensive full vectorization unless
-`app.rag.vectorize-on-startup` allows it.
+启动路径需要注意不要触发昂贵的全量向量化，除非 `app.rag.vectorize-on-startup` 允许。
 
-## Testing
+## 测试
 
-Chunker tests:
+Chunker 测试：
 
-- Long text with no rule keywords still splits into multiple chunks.
-- Chinese rule starts such as `第1条`, `禁止：`, `建议：`, and `检查项：` create
-  rule boundaries.
-- Oversized single paragraphs fall back to token-window splitting.
-- Normal chunks do not exceed `hardMaxTokens`.
-- Short chunks merge when under `minChunkTokens` and compatible.
-- Chunks do not exceed `maxRuleIdsPerChunk` unless a single source block already does.
-- Metadata includes `split_reason`, `heading_path`, `token_count`, `char_start`, and
-  `char_end`.
+- 没有规则关键词的长文本仍会被切成多个 chunks。
+- 中文规则起点，例如 `第1条`、`禁止：`、`建议：`、`检查项：`，能产生规则边界。
+- 超大的单段落会退到 token 滑窗切分。
+- 普通 chunks 不超过 `hardMaxTokens`。
+- 短 chunks 在低于 `minChunkTokens` 且兼容时会合并。
+- 除非单个源块本身已经超过限制，否则 chunks 不超过 `maxRuleIdsPerChunk`。
+- 元数据包含 `split_reason`、`heading_path`、`token_count`、`char_start` 和 `char_end`。
 
-BM25 tests:
+BM25 测试：
 
-- BM25 returns chunk-level matches.
-- Query terms in title, heading path, rule IDs, category, and content are searchable.
+- BM25 返回 chunk 级匹配。
+- title、heading path、rule IDs、category 和 content 中的 query 词都可检索。
 
-Retriever tests:
+Retriever 测试：
 
-- Two vector chunks from the same document remain separate candidates.
-- Vector and BM25 hits are fused only when they refer to the same chunk ID.
-- Reranker receives chunk-level candidates.
-- Legacy `search()` can map top chunks back to unique documents.
+- 同一文档下的两个向量 chunks 会保留为独立候选。
+- 向量和 BM25 只有在命中同一 chunk ID 时才融合。
+- Reranker 接收 chunk 级候选。
+- 旧版 `search()` 可以把 top chunks 映射回去重后的文档。
 
-Service tests:
+Service 测试：
 
-- Upload creates document, chunks, and vector records.
-- Updating a document deletes old chunks/vectors and writes new ones.
-- Changed strategy/config hash triggers rebuild.
-- Deleting a document removes chunks and vector records.
+- 上传会创建文档、chunks 和向量记录。
+- 更新文档会删除旧 chunks/旧向量，并写入新的记录。
+- strategy/config hash 变化会触发重建。
+- 删除文档会移除 chunks 和向量记录。
 
-## Evaluation
+## 评估
 
-Extend `tools/rag_eval` with:
+扩展 `tools/rag_eval`，增加：
 
 ```text
 avg_chunk_tokens
@@ -656,36 +625,35 @@ same_document_multi_chunk_recall_rate
 topK_unique_chunk_count
 ```
 
-Primary success criteria:
+主要成功标准：
 
-- Lower average rule IDs per top chunk.
-- P95 chunk size stays within the configured hard maximum.
-- Recall stays stable or improves.
-- Token-window fallback rate is visible and not silently hidden.
-- Same-document multiple chunk recall works when a query matches several chunks.
+- top chunk 的平均 rule ID 数降低。
+- P95 chunk 大小保持在配置的硬上限内。
+- 召回率保持稳定或提升。
+- token-window fallback rate 可见，不再被静默隐藏。
+- 当 query 匹配同一文档下多个 chunks 时，能够召回多个独立 chunk。
 
-## Risks
+## 风险
 
-Risk: Chunk count increases vectorization cost and storage.
-Mitigation: Use configurable target/hard limits and monitor chunk counts.
+风险：chunk 数增加会提高向量化成本和存储成本。
+缓解：使用可配置的 target/hard 限制，并监控 chunk 数。
 
-Risk: Chunks become too small and lose context.
-Mitigation: Use overlap, `minChunkTokens`, and rule-aware merging.
+风险：chunk 过小导致上下文丢失。
+缓解：使用 overlap、`minChunkTokens` 和规则感知合并。
 
-Risk: Old vectors remain after updates.
-Mitigation: Delete vectors by document ID before writing rebuilt chunks.
+风险：更新后旧向量仍然残留。
+缓解：写入重建 chunks 前，先按文档 ID 删除向量。
 
-Risk: Strategy version is not bumped after logic changes.
-Mitigation: Use both `chunk_strategy` and `chunk_config_hash`; update tests to verify
-stale chunks rebuild when parameters change.
+风险：修改切分逻辑后忘记提升 strategy version。
+缓解：同时使用 `chunk_strategy` 和 `chunk_config_hash`；更新测试，验证参数变化时 stale chunks 会重建。
 
-## Recommended Implementation Order
+## 推荐实施顺序
 
-1. Add `KnowledgeChunk` entity, repository, and chunking configuration.
-2. Refactor `StructuredDocumentChunker` to produce chunk objects with metadata.
-3. Add stale detection and document-level chunk rebuild service.
-4. Update vector writing and cleanup to use chunks.
-5. Replace BM25 document index with `Bm25ChunkIndex`.
-6. Update retriever candidate identity and fusion to use `chunkId`.
-7. Preserve legacy document search compatibility.
-8. Add tests and extend offline evaluation metrics.
+1. 新增 `KnowledgeChunk` 实体、Repository 和 chunking 配置。
+2. 重构 `StructuredDocumentChunker`，让它生成带元数据的 chunk 对象。
+3. 新增 stale 检测和文档级 chunk 重建服务。
+4. 更新向量写入和清理逻辑，让它们使用 chunks。
+5. 用 `Bm25ChunkIndex` 替换文档级 BM25 索引。
+6. 更新 retriever 候选身份和融合逻辑，使用 `chunkId`。
+7. 保留旧文档搜索兼容性。
+8. 添加测试并扩展离线评估指标。
