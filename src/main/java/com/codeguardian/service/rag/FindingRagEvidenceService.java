@@ -92,6 +92,7 @@ public class FindingRagEvidenceService {
                                           String language,
                                           int requestedTopK) {
         String excerpt = trim(chunk.getContent(), EVIDENCE_EXCERPT_MAX);
+        Map<String, Object> rerankAudit = RerankAuditSummary.fromChunk(chunk);
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("retrievalScope", "FINDING");
         metadata.put("queryHash", hashService.sha256Hex(query));
@@ -108,6 +109,7 @@ public class FindingRagEvidenceService {
         metadata.put("chunkId", chunk.getChunkId());
         metadata.put("title", chunk.getTitle());
         metadata.put("score", chunk.getScore());
+        metadata.put("rerankAudit", rerankAudit);
         metadata.put("sourceMetadata", chunk.getMetadata());
 
         return EvidenceDraft.builder()

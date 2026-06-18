@@ -14,6 +14,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
@@ -54,6 +55,15 @@ class TaskRagPackServiceTest {
                         .retrievalMode("VECTOR_BM25_FUSED")
                         .rank(1)
                         .score(0.98d)
+                        .metadata(Map.of(
+                                "reranked", true,
+                                "reranker", "cross_encoder",
+                                "rerankerModel", "test-reranker",
+                                "crossEncoderScore", 0.91d,
+                                "fusionScoreBeforeRerank", 0.22d,
+                                "finalRerankScore", 0.88d,
+                                "rerankCandidateCount", 4
+                        ))
                         .build()
         ));
 
@@ -90,8 +100,12 @@ class TaskRagPackServiceTest {
                         && drafts.size() == 1
                         && "TASK_RAG_PACK".equals(drafts.get(0).getEvidenceType())
                         && drafts.get(0).getExcerpt().contains("chunk-1")
-                        && drafts.get(0).getMetadata().containsKey("packContentHash")));
-        verify(auditService).record(eq(38L), eq("TASK_RAG_PACK_CREATED"), eq("RAG"), eq("system"), anyString(), any());
+                        && drafts.get(0).getMetadata().containsKey("packContentHash")
+                        && Boolean.TRUE.equals(((Map<?, ?>) drafts.get(0).getMetadata().get("rerankAudit")).get("applied"))));
+        verify(auditService).record(eq(38L), eq("TASK_RAG_PACK_CREATED"), eq("RAG"), eq("system"), anyString(),
+                argThat(metadata -> metadata != null
+                        && metadata.containsKey("rerankAudit")
+                        && Boolean.TRUE.equals(((Map<?, ?>) metadata.get("rerankAudit")).get("applied"))));
 
         service.evict(38L);
 

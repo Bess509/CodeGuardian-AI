@@ -32,7 +32,16 @@ class FindingRagEvidenceServiceTest {
                 .retrievalMode("VECTOR_ONLY")
                 .rank(1)
                 .score(0.42d)
-                .metadata(Map.of("rule_ids", List.of("RULE-SQL-001")))
+                .metadata(Map.of(
+                        "rule_ids", List.of("RULE-SQL-001"),
+                        "reranked", true,
+                        "reranker", "cross_encoder",
+                        "rerankerModel", "test-reranker",
+                        "crossEncoderScore", 0.93d,
+                        "fusionScoreBeforeRerank", 0.18d,
+                        "finalRerankScore", 0.90d,
+                        "rerankCandidateCount", 4
+                ))
                 .build();
 
         when(knowledgeBaseService.searchSnippetChunks(anyString(), eq(1))).thenReturn(List.of(chunk));
@@ -52,6 +61,10 @@ class FindingRagEvidenceServiceTest {
         assertEquals("FINDING", draft.getMetadata().get("retrievalScope"));
         assertEquals("SQL Injection", draft.getMetadata().get("findingTitle"));
         assertEquals("VECTOR_ONLY", draft.getMetadata().get("retrievalMode"));
+        Map<?, ?> rerankAudit = (Map<?, ?>) draft.getMetadata().get("rerankAudit");
+        assertEquals(true, rerankAudit.get("applied"));
+        assertEquals("test-reranker", rerankAudit.get("rerankerModel"));
+        assertEquals(0.93d, (Double) rerankAudit.get("topCrossEncoderScore"));
     }
 
     @Test

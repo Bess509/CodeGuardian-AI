@@ -79,6 +79,7 @@ public class TaskRagPackService {
                     .map(TaskRagPackItem::from)
                     .filter(item -> item != null)
                     .collect(Collectors.toList());
+            Map<String, Object> rerankAudit = RerankAuditSummary.fromChunks(recalled);
 
             long now = Instant.now().toEpochMilli();
             TaskRagPack pack = TaskRagPack.builder()
@@ -102,7 +103,8 @@ public class TaskRagPackService {
                             "sampleFileCount", sample.sampleFileCount(),
                             "sampleCharCount", sample.code() != null ? sample.code().length() : 0,
                             "scope", task.getScope(),
-                            "redisKey", redisKey(task.getId())
+                            "redisKey", redisKey(task.getId()),
+                            "rerankAudit", rerankAudit
                     ))
                     .build();
             pack.setContentHash(hashJson(pack));
@@ -115,7 +117,8 @@ public class TaskRagPackService {
                             "chunkCount", items.size(),
                             "queryStrategy", pack.getQueryStrategy(),
                             "redisKey", redisKey(task.getId()),
-                            "ttlSeconds", ttlSeconds));
+                            "ttlSeconds", ttlSeconds,
+                            "rerankAudit", rerankAudit));
             return Optional.of(pack);
         } catch (Exception e) {
             log.warn("Task RAG pack creation failed for taskId={}: {}", task.getId(), e.getMessage());
@@ -210,6 +213,7 @@ public class TaskRagPackService {
             return;
         }
         String summaryJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(pack.toSummary());
+        Map<String, Object> rerankAudit = RerankAuditSummary.fromPackItems(pack.getItems());
         EvidenceDraft draft = EvidenceDraft.builder()
                 .evidenceType("TASK_RAG_PACK")
                 .sourceName("TaskRagPackService")
@@ -227,7 +231,8 @@ public class TaskRagPackService {
                         "promptTopK", pack.getPromptTopK(),
                         "redisKey", redisKey(task.getId()),
                         "queryStrategy", pack.getQueryStrategy(),
-                        "queryHash", safeHash(pack.getQueryText())
+                        "queryHash", safeHash(pack.getQueryText()),
+                        "rerankAudit", rerankAudit
                 ))
                 .build();
         provenanceService.persistTaskEvidence(task, List.of(draft));

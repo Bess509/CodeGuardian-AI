@@ -64,8 +64,14 @@ public class TaskRagPackItem {
         put(summary, "sourceRef", sourceRef);
         put(summary, "retrievalMode", retrievalMode);
         put(summary, "score", score);
-        if (metadata != null && metadata.get("fusedScore") != null) {
+        if (metadata != null) {
             put(summary, "fusedScore", metadata.get("fusedScore"));
+            put(summary, "reranked", metadata.get("reranked"));
+            put(summary, "reranker", metadata.get("reranker"));
+            put(summary, "rerankerModel", metadata.get("rerankerModel"));
+            put(summary, "crossEncoderScore", metadata.get("crossEncoderScore"));
+            put(summary, "fusionScoreBeforeRerank", metadata.get("fusionScoreBeforeRerank"));
+            put(summary, "finalRerankScore", metadata.get("finalRerankScore"));
         }
         return summary;
     }
