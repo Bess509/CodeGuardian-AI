@@ -48,6 +48,7 @@ database/20260315/
 application-local.yml
 src/main/resources/application-local.yml
 src/main/resources/application-secret.yml
+start-codeguardian-local.bat
 *.pem
 *.key
 *.p12
