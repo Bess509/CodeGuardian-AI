@@ -4,6 +4,7 @@ import com.codeguardian.dto.ReviewResponseDTO;
 import com.codeguardian.dto.integration.CicdStatusResponse;
 import com.codeguardian.entity.Finding;
 import com.codeguardian.entity.ReviewTask;
+import com.codeguardian.enums.ReviewTypeEnum;
 import com.codeguardian.enums.SeverityEnum;
 import com.codeguardian.enums.TaskStatusEnum;
 import com.codeguardian.repository.FindingRepository;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @Service
@@ -84,7 +86,7 @@ public class CicdArtifactService {
         Map<String, Object> run = new LinkedHashMap<>();
         run.put("tool", Map.of("driver", driver));
         run.put("automationDetails", Map.of("id", "codeguardian-task-" + taskId));
-        run.put("results", findings.stream().map(this::sarifResult).toList());
+        run.put("results", findings.stream().map(finding -> sarifResult(finding, task)).toList());
 
         Map<String, Object> sarif = new LinkedHashMap<>();
         sarif.put("$schema", "https://json.schemastore.org/sarif-2.1.0.json");
@@ -189,12 +191,12 @@ public class CicdArtifactService {
         return rule;
     }
 
-    private Map<String, Object> sarifResult(Finding finding) {
+    private Map<String, Object> sarifResult(Finding finding, ReviewTask task) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("ruleId", ruleId(finding));
         result.put("level", sarifLevel(finding.getSeverity()));
         result.put("message", Map.of("text", safeText(finding.getDescription(), safeText(finding.getTitle(), ruleId(finding)))));
-        result.put("locations", List.of(Map.of("physicalLocation", physicalLocation(finding))));
+        result.put("locations", List.of(Map.of("physicalLocation", physicalLocation(finding, task))));
         result.put("properties", Map.of(
                 "severity", severity(finding.getSeverity()),
                 "grounded", Boolean.TRUE.equals(finding.getGrounded()),
@@ -204,7 +206,7 @@ public class CicdArtifactService {
         return result;
     }
 
-    private Map<String, Object> physicalLocation(Finding finding) {
+    private Map<String, Object> physicalLocation(Finding finding, ReviewTask task) {
         Map<String, Object> region = new LinkedHashMap<>();
         if (finding.getStartLine() != null) {
             region.put("startLine", Math.max(1, finding.getStartLine()));
@@ -213,11 +215,22 @@ public class CicdArtifactService {
             region.put("endLine", Math.max(1, finding.getEndLine()));
         }
         Map<String, Object> location = new LinkedHashMap<>();
-        location.put("artifactLocation", Map.of("uri", artifactUri(finding.getLocation())));
+        location.put("artifactLocation", Map.of("uri", artifactUri(finding.getLocation(), task)));
         if (!region.isEmpty()) {
             location.put("region", region);
         }
         return location;
+    }
+
+    private String artifactUri(String location, ReviewTask task) {
+        String uri = artifactUri(location);
+        if (isLineOnlyLocation(uri)) {
+            String taskScopeUri = taskScopeFileUri(task);
+            if (!taskScopeUri.isBlank()) {
+                return taskScopeUri;
+            }
+        }
+        return uri;
     }
 
     private String artifactUri(String location) {
@@ -225,8 +238,34 @@ public class CicdArtifactService {
             return "unknown";
         }
         String normalized = location.replace("\\", "/");
-        int colon = normalized.indexOf(':');
-        return colon > 1 ? normalized.substring(0, colon).trim() : normalized.trim();
+        int lineSuffix = normalized.lastIndexOf(':');
+        if (lineSuffix > 1 && isLineOnlyLocation(normalized.substring(lineSuffix + 1))) {
+            return normalized.substring(0, lineSuffix).trim();
+        }
+        return normalized.trim();
+    }
+
+    private String taskScopeFileUri(ReviewTask task) {
+        if (task == null || task.getScope() == null || task.getScope().isBlank()) {
+            return "";
+        }
+        if (ReviewTypeEnum.fromValue(task.getReviewType()) != ReviewTypeEnum.FILE) {
+            return "";
+        }
+        String scope = task.getScope().replace("\\", "/").trim();
+        if (scope.contains("\n") || scope.contains("\r")) {
+            return "";
+        }
+        return scope;
+    }
+
+    private boolean isLineOnlyLocation(String location) {
+        if (location == null || location.isBlank()) {
+            return true;
+        }
+        String normalized = location.trim().toLowerCase(Locale.ROOT);
+        return normalized.matches("line\\s+\\d+(?:\\s*-\\s*\\d+)?")
+                || normalized.matches("\\d+(?:\\s*-\\s*\\d+)?");
     }
 
     private String ruleId(Finding finding) {
