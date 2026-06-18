@@ -323,17 +323,20 @@ def main() -> int:
     retrieval_metrics = {}
     semantic_metrics = {}
     review_metrics = {}
+    chunk_health_metrics = {}
     examples = {}
     for name, chunks in pipelines.items():
         retriever = HybridRetriever(chunks)
         retrieval_metrics[name], examples[name] = evaluate_retrieval(retriever, queries)
         semantic_metrics[name] = evaluate_semantic_loss(chunks)
         review_metrics[name] = evaluate_code_cases(retriever)
+        chunk_health_metrics[name] = evaluate_chunk_health(chunks)
 
     metrics = {
         "retrieval": retrieval_metrics,
         "semantic_loss": semantic_metrics,
         "review_support": review_metrics,
+        "chunk_health": chunk_health_metrics,
     }
     write_json(run_dir / "metrics.json", metrics)
     write_json(run_dir / "examples.json", examples)
@@ -481,13 +484,16 @@ def parse_baseline_tika_token(repo_root: Path, base_dir: Path, run_dir: Path, pd
         ], cwd=repo_root, text=True, encoding="utf-8", capture_output=True, check=True)
         items = json.loads(extract_json_array(result.stdout))
         for item in items:
+            content = item.get("content", "")
             metadata = item.get("metadata") or {}
-            metadata["rule_ids"] = sorted(extract_rule_ids(item.get("content", "")))
+            metadata["rule_ids"] = sorted(extract_rule_ids(content))
+            metadata["token_count"] = len(tokenize(content))
+            metadata["split_reason"] = metadata.get("split_reason") or "token_window"
             chunks.append(Chunk(
                 chunk_id=f"baseline:{pdf_path.name}:{item.get('chunk_index')}",
                 pipeline="baseline_tika_token",
                 source_file=pdf_path.name,
-                content=item.get("content", ""),
+                content=content,
                 metadata=metadata,
             ))
     return chunks
@@ -556,6 +562,9 @@ def structured_chunks(markdown: str, pipeline: str, source_file: str, target_tok
         if not text:
             continue
         pieces = split_with_overlap(text, target_tokens, overlap_tokens)
+        split_reason = "token_window" if len(pieces) > 1 else (
+            "rule_boundary" if rule_ids else ("heading" if heading_path else "paragraph")
+        )
         for piece_index, piece in enumerate(pieces):
             piece_text = piece
             if prefix and not piece_text.startswith(prefix):
@@ -573,6 +582,8 @@ def structured_chunks(markdown: str, pipeline: str, source_file: str, target_tok
                     "section_piece_index": piece_index,
                     "heading_path": heading_path,
                     "rule_ids": chunk_rule_ids,
+                    "split_reason": split_reason,
+                    "token_count": len(tokenize(piece_text)),
                 },
             ))
             index += 1
@@ -688,6 +699,53 @@ class HybridRetriever:
         return dot / (q_norm * self.doc_norms[doc_idx])
 
 
+def evaluate_chunk_health(chunks: list[Chunk]) -> dict[str, Any]:
+    token_counts = [chunk_token_count(chunk) for chunk in chunks]
+    rule_id_counts = [len(chunk.rule_ids) for chunk in chunks]
+    token_window_count = sum(1 for chunk in chunks if chunk_split_reason(chunk) == "token_window")
+    no_rule_boundary_count = sum(1 for count in rule_id_counts if count == 0)
+    total = len(chunks)
+
+    return {
+        "chunk_count": total,
+        "avg_chunk_tokens": round(sum(token_counts) / max(1, total), 4),
+        "p95_chunk_tokens": percentile_nearest_rank(token_counts, 95),
+        "avg_rule_ids_per_chunk": round(sum(rule_id_counts) / max(1, total), 4),
+        "chunks_without_detected_rule_boundary_rate": round(no_rule_boundary_count / max(1, total), 4),
+        "token_window_fallback_rate": round(token_window_count / max(1, total), 4),
+    }
+
+
+def chunk_token_count(chunk: Chunk) -> int:
+    value = chunk.metadata.get("token_count")
+    if isinstance(value, bool):
+        return len(tokenize(chunk.content))
+    if isinstance(value, int):
+        return max(0, value)
+    if isinstance(value, float):
+        return max(0, int(value))
+    if isinstance(value, str) and value.strip():
+        try:
+            return max(0, int(float(value)))
+        except ValueError:
+            pass
+    return len(tokenize(chunk.content))
+
+
+def chunk_split_reason(chunk: Chunk) -> str:
+    value = chunk.metadata.get("split_reason") or chunk.metadata.get("splitReason")
+    return str(value or "").strip().lower()
+
+
+def percentile_nearest_rank(values: list[int], percentile: int) -> int:
+    if not values:
+        return 0
+    sorted_values = sorted(values)
+    rank = math.ceil((percentile / 100.0) * len(sorted_values))
+    index = min(len(sorted_values) - 1, max(0, rank - 1))
+    return sorted_values[index]
+
+
 def evaluate_retrieval(retriever: HybridRetriever, queries: list[QuerySpec]) -> tuple[dict[str, float], list[dict[str, Any]]]:
     hits = 0
     top1_hits = 0
@@ -695,10 +753,12 @@ def evaluate_retrieval(retriever: HybridRetriever, queries: list[QuerySpec]) -> 
     precision_total = 0.0
     top1_rule_id_total = 0
     top5_rule_id_total = 0
+    topk_unique_chunk_total = 0
     examples: list[dict[str, Any]] = []
     for query in queries:
         expected = {normalize_rule_id(x) for x in query.expected_rule_ids}
         results = retriever.search(query.query, 5)
+        topk_unique_chunk_total += len({chunk.chunk_id for chunk, _ in results})
         ranks = []
         relevant_count = 0
         for rank, (chunk, score) in enumerate(results, 1):
@@ -740,6 +800,7 @@ def evaluate_retrieval(retriever: HybridRetriever, queries: list[QuerySpec]) -> 
         "precision_at_5": round(precision_total / total, 4),
         "avg_top1_rule_ids": round(top1_rule_id_total / max(1, total), 4),
         "avg_top5_chunk_rule_ids": round(top5_rule_id_total / max(1, total * 5), 4),
+        "topK_unique_chunk_count": round(topk_unique_chunk_total / max(1, total), 4),
     }, examples
 
 
@@ -845,6 +906,7 @@ def write_report(path: Path, metrics: dict[str, Any], examples: dict[str, Any], 
     base_sem = metrics["semantic_loss"].get("baseline_tika_token", {})
     md_sem = metrics["semantic_loss"].get("markitdown_structured", {})
     doc_sem = metrics["semantic_loss"].get("docling_structured") or metrics["semantic_loss"].get("pymupdf4llm_structured", {})
+    chunk_health = metrics.get("chunk_health", {})
     if baseline and pymupdf:
         top1_delta = (pymupdf.get("top1_accuracy", 0) - baseline.get("top1_accuracy", 0)) * 100
         contamination_delta = baseline.get("avg_top1_rule_ids", 0) - pymupdf.get("avg_top1_rule_ids", 0)
@@ -862,6 +924,12 @@ def write_report(path: Path, metrics: dict[str, Any], examples: dict[str, Any], 
     if base_sem and doc_sem:
         loss_delta = (base_sem.get("semantic_loss_rate", 0) - doc_sem.get("semantic_loss_rate", 0)) * 100
         lines.append(f"- Semantic loss rate dropped from {base_sem.get('semantic_loss_rate', 0):.4f} to {doc_sem.get('semantic_loss_rate', 0):.4f}, an absolute reduction of {loss_delta:.2f} percentage points.")
+    if chunk_health:
+        highest_token_window = max(
+            chunk_health.items(),
+            key=lambda item: item[1].get("token_window_fallback_rate", 0),
+        )
+        lines.append(f"- Chunk health metrics now surface average/P95 chunk size, rule IDs per chunk, and token-window fallback rate; `{highest_token_window[0]}` had the highest token-window fallback rate at {highest_token_window[1].get('token_window_fallback_rate', 0):.4f}.")
     lines.append("- Clean false-positive support was 0.0000 for all pipelines in this deterministic proxy test; this means the parser/chunker change did not introduce extra RAG-supported false positives in the generated clean cases.")
     lines.append("")
     lines.append("Recommendation: adopt PDF-specialized Markdown/structured parsing plus heading/rule-aware chunking. MarkItDown is a viable multi-format entry adapter, PyMuPDF4LLM is the faster default PDF candidate, and Docling remains a fallback for table-heavy or structurally complex PDFs.")
@@ -890,10 +958,17 @@ def write_report(path: Path, metrics: dict[str, Any], examples: dict[str, Any], 
     lines.append("")
     lines.append("## Retrieval Metrics")
     lines.append("")
-    lines.append("| Pipeline | Query Count | Top1 | Recall@5 | MRR@5 | Precision@5 | Avg Top1 Rule IDs |")
-    lines.append("|---|---:|---:|---:|---:|---:|---:|")
+    lines.append("| Pipeline | Query Count | Top1 | Recall@5 | MRR@5 | Precision@5 | Avg Top1 Rule IDs | Avg Top5 Rule IDs | TopK Unique Chunks |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
     for name, values in metrics["retrieval"].items():
-        lines.append(f"| {name} | {values['query_count']} | {values['top1_accuracy']:.4f} | {values['recall_at_5']:.4f} | {values['mrr_at_5']:.4f} | {values['precision_at_5']:.4f} | {values['avg_top1_rule_ids']:.4f} |")
+        lines.append(f"| {name} | {values['query_count']} | {values['top1_accuracy']:.4f} | {values['recall_at_5']:.4f} | {values['mrr_at_5']:.4f} | {values['precision_at_5']:.4f} | {values['avg_top1_rule_ids']:.4f} | {values['avg_top5_chunk_rule_ids']:.4f} | {values['topK_unique_chunk_count']:.4f} |")
+    lines.append("")
+    lines.append("## Chunk Health")
+    lines.append("")
+    lines.append("| Pipeline | Chunks | Avg Tokens | P95 Tokens | Avg Rule IDs/Chunk | Token Window Rate | No Rule Boundary Rate |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|")
+    for name, values in chunk_health.items():
+        lines.append(f"| {name} | {values['chunk_count']} | {values['avg_chunk_tokens']:.4f} | {values['p95_chunk_tokens']} | {values['avg_rule_ids_per_chunk']:.4f} | {values['token_window_fallback_rate']:.4f} | {values['chunks_without_detected_rule_boundary_rate']:.4f} |")
     lines.append("")
     lines.append("## Semantic Loss")
     lines.append("")

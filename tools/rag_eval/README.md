@@ -14,6 +14,9 @@ Primary metrics:
 - `Recall@5`: whether the expected rule appears in the top 5 retrieved chunks.
 - `MRR@5`: how high the first expected rule is ranked.
 - `Precision@5`: fraction of top 5 chunks that are expected.
+- `TopK unique chunk count`: average number of unique chunk IDs returned in the top 5.
+- `Chunk health`: average chunk tokens, P95 chunk tokens, average rule IDs per chunk,
+  token-window fallback rate, and chunks without detected rule-boundary rate.
 - `Semantic loss rate`: how often a rule's key semantic anchors are not preserved together in any chunk.
 - `Clean false-positive support rate`: for safe code samples, whether retrieval supports a risky rule without retrieving the expected safe guidance.
 
