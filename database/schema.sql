@@ -220,7 +220,55 @@ CREATE TABLE IF NOT EXISTS review_audit_events (
         FOREIGN KEY (task_id) REFERENCES review_tasks(id) ON DELETE CASCADE
 );
 
--- 2.12 Spring AI PGVector 向量存储表
+-- 2.12 RAG chunk-level knowledge evidence table.
+CREATE TABLE IF NOT EXISTS knowledge_chunk (
+    id VARCHAR(64) PRIMARY KEY,
+    document_id VARCHAR(64) NOT NULL,
+    chunk_index INTEGER NOT NULL,
+    title VARCHAR(255),
+    content TEXT NOT NULL,
+    heading_path TEXT,
+    rule_ids JSONB,
+    chunk_strategy VARCHAR(96),
+    chunk_config_hash CHAR(64),
+    source_content_hash CHAR(64),
+    char_start INTEGER,
+    char_end INTEGER,
+    token_count INTEGER,
+    overlap_tokens INTEGER,
+    metadata JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT uk_knowledge_chunk_document_index UNIQUE (document_id, chunk_index),
+    CONSTRAINT chk_knowledge_chunk_offsets
+        CHECK ((char_start IS NULL AND char_end IS NULL) OR
+               (char_start IS NOT NULL AND char_end IS NOT NULL AND char_end >= char_start)),
+    CONSTRAINT chk_knowledge_chunk_token_count
+        CHECK (token_count IS NULL OR token_count >= 0),
+    CONSTRAINT chk_knowledge_chunk_overlap_tokens
+        CHECK (overlap_tokens IS NULL OR overlap_tokens >= 0)
+);
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'knowledge_documents'
+    ) AND NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_knowledge_chunk_document_id'
+    ) THEN
+        ALTER TABLE knowledge_chunk
+            ADD CONSTRAINT fk_knowledge_chunk_document_id
+            FOREIGN KEY (document_id) REFERENCES knowledge_documents(id) ON DELETE CASCADE;
+    END IF;
+END $$;
+
+-- 2.13 Spring AI PGVector 向量存储表
 CREATE TABLE IF NOT EXISTS vector_store (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     content TEXT,
@@ -291,6 +339,9 @@ CREATE INDEX IF NOT EXISTS idx_review_audit_events_task_id ON review_audit_event
 CREATE INDEX IF NOT EXISTS idx_review_audit_events_event_hash ON review_audit_events(event_hash);
 CREATE INDEX IF NOT EXISTS idx_review_audit_events_signature_key_id ON review_audit_events(signature_key_id);
 CREATE INDEX IF NOT EXISTS idx_review_audit_events_created_at ON review_audit_events(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_knowledge_chunk_document_id ON knowledge_chunk(document_id);
+CREATE INDEX IF NOT EXISTS idx_knowledge_chunk_strategy ON knowledge_chunk(chunk_strategy);
+CREATE INDEX IF NOT EXISTS idx_knowledge_chunk_source_hash ON knowledge_chunk(source_content_hash);
 CREATE INDEX IF NOT EXISTS spring_ai_vector_index
     ON vector_store USING hnsw (embedding vector_cosine_ops);
 
@@ -333,6 +384,13 @@ CREATE TRIGGER trigger_review_tasks_updated_at
 DROP TRIGGER IF EXISTS trigger_review_reports_updated_at ON review_reports;
 CREATE TRIGGER trigger_review_reports_updated_at
     BEFORE UPDATE ON review_reports
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- knowledge_chunk 表触发器
+DROP TRIGGER IF EXISTS trigger_knowledge_chunk_updated_at ON knowledge_chunk;
+CREATE TRIGGER trigger_knowledge_chunk_updated_at
+    BEFORE UPDATE ON knowledge_chunk
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
