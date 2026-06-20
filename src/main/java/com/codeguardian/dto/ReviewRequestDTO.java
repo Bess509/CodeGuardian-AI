@@ -65,6 +65,10 @@ public class ReviewRequestDTO {
      * 任务名称（可选，默认自动生成）
      */
     private String taskName;
+
+    private Long sessionId;
+
+    private String projectKey;
     
     /**
      * AI模型提供商（可选，默认使用配置的provider）

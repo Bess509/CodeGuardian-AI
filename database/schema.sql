@@ -96,9 +96,28 @@ CREATE TABLE IF NOT EXISTS role_permissions (
 );
 
 -- 2.6 审查任务表
+CREATE TABLE IF NOT EXISTS review_sessions (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    project_key VARCHAR(255) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    summary TEXT,
+    status SMALLINT NOT NULL DEFAULT 0,
+    metadata JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_review_sessions_user_id
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT chk_review_sessions_status
+        CHECK (status IN (0, 1, 2))
+);
+
 CREATE TABLE IF NOT EXISTS review_tasks (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
+    session_id BIGINT,
+    project_key VARCHAR(255),
     name VARCHAR(128) NOT NULL,
     review_type SMALLINT NOT NULL,
     scope TEXT,
@@ -111,6 +130,8 @@ CREATE TABLE IF NOT EXISTS review_tasks (
     
     CONSTRAINT fk_review_tasks_user_id 
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_review_tasks_session_id
+        FOREIGN KEY (session_id) REFERENCES review_sessions(id) ON DELETE SET NULL,
     CONSTRAINT chk_review_tasks_status 
         CHECK (status IN (0, 1, 2, 3, 4)),
     CONSTRAINT chk_review_tasks_type 
@@ -120,6 +141,56 @@ CREATE TABLE IF NOT EXISTS review_tasks (
 );
 
 -- 2.7 审查发现表
+CREATE TABLE IF NOT EXISTS review_session_messages (
+    id BIGSERIAL PRIMARY KEY,
+    session_id BIGINT NOT NULL,
+    role VARCHAR(32) NOT NULL,
+    content TEXT NOT NULL,
+    task_id BIGINT,
+    finding_id BIGINT,
+    metadata JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_review_session_messages_session_id
+        FOREIGN KEY (session_id) REFERENCES review_sessions(id) ON DELETE CASCADE,
+    CONSTRAINT fk_review_session_messages_task_id
+        FOREIGN KEY (task_id) REFERENCES review_tasks(id) ON DELETE SET NULL,
+    CONSTRAINT chk_review_session_messages_role
+        CHECK (role IN ('USER', 'ASSISTANT', 'SYSTEM', 'TOOL'))
+);
+
+CREATE TABLE IF NOT EXISTS review_session_memories (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    project_key VARCHAR(255) NOT NULL,
+    session_id BIGINT,
+    scope VARCHAR(48) NOT NULL,
+    memory_type VARCHAR(64) NOT NULL,
+    content TEXT NOT NULL,
+    summary TEXT,
+    status VARCHAR(32) NOT NULL DEFAULT 'CANDIDATE',
+    source_type VARCHAR(64) NOT NULL,
+    source_id VARCHAR(128),
+    confidence DOUBLE PRECISION DEFAULT 0.5,
+    embedding_text TEXT,
+    embedding vector(384),
+    metadata JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TIMESTAMPTZ,
+
+    CONSTRAINT fk_review_session_memories_user_id
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_review_session_memories_session_id
+        FOREIGN KEY (session_id) REFERENCES review_sessions(id) ON DELETE CASCADE,
+    CONSTRAINT chk_review_session_memories_scope
+        CHECK (scope IN ('USER_MEMORY', 'PROJECT_MEMORY', 'SESSION_MEMORY')),
+    CONSTRAINT chk_review_session_memories_status
+        CHECK (status IN ('CANDIDATE', 'ACTIVE', 'ARCHIVED')),
+    CONSTRAINT chk_review_session_memories_confidence
+        CHECK (confidence IS NULL OR (confidence >= 0 AND confidence <= 1))
+);
+
 CREATE TABLE IF NOT EXISTS findings (
     id BIGSERIAL PRIMARY KEY,
     task_id BIGINT NOT NULL,
@@ -310,12 +381,22 @@ CREATE INDEX IF NOT EXISTS idx_role_permissions_permission_id ON role_permission
 
 -- 3.6 review_tasks 表索引
 CREATE INDEX IF NOT EXISTS idx_review_tasks_user_id ON review_tasks(user_id);
+CREATE INDEX IF NOT EXISTS idx_review_tasks_session_id ON review_tasks(session_id);
+CREATE INDEX IF NOT EXISTS idx_review_tasks_project_key ON review_tasks(project_key);
 CREATE INDEX IF NOT EXISTS idx_review_tasks_type ON review_tasks(review_type);
 CREATE INDEX IF NOT EXISTS idx_review_tasks_status ON review_tasks(status);
 CREATE INDEX IF NOT EXISTS idx_review_tasks_created_at ON review_tasks(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_review_tasks_status_created_at ON review_tasks(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_review_tasks_name_gin ON review_tasks USING gin(name gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_review_tasks_metadata_gin ON review_tasks USING gin(metadata);
+CREATE INDEX IF NOT EXISTS idx_review_sessions_user_project ON review_sessions(user_id, project_key, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_review_session_messages_session_created ON review_session_messages(session_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_review_session_messages_task_id ON review_session_messages(task_id);
+CREATE INDEX IF NOT EXISTS idx_review_session_memories_user_project_status ON review_session_memories(user_id, project_key, status);
+CREATE INDEX IF NOT EXISTS idx_review_session_memories_session_id ON review_session_memories(session_id);
+CREATE INDEX IF NOT EXISTS idx_review_session_memories_last_used_at ON review_session_memories(last_used_at DESC);
+CREATE INDEX IF NOT EXISTS idx_review_session_memories_embedding
+    ON review_session_memories USING hnsw (embedding vector_cosine_ops);
 
 -- 3.2 findings 表索引
 CREATE INDEX IF NOT EXISTS idx_findings_task_id ON findings(task_id);
@@ -377,6 +458,20 @@ $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS trigger_review_tasks_updated_at ON review_tasks;
 CREATE TRIGGER trigger_review_tasks_updated_at
     BEFORE UPDATE ON review_tasks
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- review_sessions table timestamp trigger.
+DROP TRIGGER IF EXISTS trigger_review_sessions_updated_at ON review_sessions;
+CREATE TRIGGER trigger_review_sessions_updated_at
+    BEFORE UPDATE ON review_sessions
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- review_session_memories table timestamp trigger.
+DROP TRIGGER IF EXISTS trigger_review_session_memories_updated_at ON review_session_memories;
+CREATE TRIGGER trigger_review_session_memories_updated_at
+    BEFORE UPDATE ON review_session_memories
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
@@ -442,6 +537,8 @@ COMMENT ON TABLE role_permissions IS '角色权限关联表';
 COMMENT ON COLUMN review_tasks.user_id IS '创建用户ID，关联users表';
 COMMENT ON TABLE review_tasks IS '代码审查任务表';
 COMMENT ON COLUMN review_tasks.id IS '任务ID，自增主键';
+COMMENT ON COLUMN review_tasks.session_id IS '长期审查会话ID，可为空';
+COMMENT ON COLUMN review_tasks.project_key IS '项目级长期记忆标识，可为空';
 COMMENT ON COLUMN review_tasks.name IS '任务名称';
 COMMENT ON COLUMN review_tasks.review_type IS '审查类型：PROJECT(项目)/DIRECTORY(目录)/FILE(文件)/SNIPPET(代码片段)/GIT(Git项目)';
 COMMENT ON COLUMN review_tasks.scope IS '审查范围，可以是文件路径、目录路径或代码片段';
@@ -450,6 +547,17 @@ COMMENT ON COLUMN review_tasks.created_at IS '任务创建时间';
 COMMENT ON COLUMN review_tasks.completed_at IS '任务完成时间';
 COMMENT ON COLUMN review_tasks.error_message IS '错误信息，任务失败时记录';
 COMMENT ON COLUMN review_tasks.metadata IS '元数据，JSON格式，用于存储扩展信息';
+
+COMMENT ON TABLE review_sessions IS '长期项目审查会话表';
+COMMENT ON COLUMN review_sessions.project_key IS '稳定项目标识，用于跨任务聚合上下文和长期记忆';
+COMMENT ON COLUMN review_sessions.summary IS '会话摘要压缩结果，原始消息仍以review_session_messages为准';
+COMMENT ON TABLE review_session_messages IS '长期审查会话聊天消息表';
+COMMENT ON COLUMN review_session_messages.role IS '消息角色：USER/ASSISTANT/SYSTEM/TOOL';
+COMMENT ON TABLE review_session_memories IS '项目审查助手长期记忆表';
+COMMENT ON COLUMN review_session_memories.scope IS '记忆作用域：USER_MEMORY/PROJECT_MEMORY/SESSION_MEMORY';
+COMMENT ON COLUMN review_session_memories.status IS '记忆状态：CANDIDATE/ACTIVE/ARCHIVED';
+COMMENT ON COLUMN review_session_memories.source_type IS '记忆来源类型，如USER_INPUT/TASK_REPORT/FINDING/AUDIT/EVIDENCE';
+COMMENT ON COLUMN review_session_memories.embedding IS 'PGVector向量列，用于后续语义相似度召回';
 
 -- findings 表注释
 COMMENT ON TABLE findings IS '代码审查发现的问题表';

@@ -1,5 +1,6 @@
 package com.codeguardian.service;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.codeguardian.dto.FileContentDTO;
 import com.codeguardian.dto.ReviewRequestDTO;
 import com.codeguardian.dto.ReviewResponseDTO;
@@ -141,6 +142,9 @@ public class ReviewService {
         
         // 创建任务
         ReviewTask task = ReviewTask.builder()
+                .userId(resolveCurrentUserId())
+                .sessionId(request.getSessionId())
+                .projectKey(normalizeProjectKey(request.getProjectKey()))
                 .name(request.getTaskName() != null ? request.getTaskName() : 
                       generateTaskName(request))
                 .reviewType(ReviewTypeEnum.fromName(request.getReviewType()).getValue())
@@ -380,6 +384,8 @@ public class ReviewService {
         ReviewRequestDTO request = ReviewRequestDTO.builder()
                 .reviewType(reviewType.name())
                 .taskName(task.getName() + "-重试")
+                .sessionId(task.getSessionId())
+                .projectKey(task.getProjectKey())
                 .language("Java")
                 .enableRag(true)
                 .rulesOnly(false)
@@ -536,6 +542,8 @@ public class ReviewService {
         return ReviewResponseDTO.builder()
                 .taskId(task.getId())
                 .taskName(task.getName())
+                .sessionId(task.getSessionId())
+                .projectKey(task.getProjectKey())
                 .status(status.name())
                 .statusLabel(status.getDesc())
                 .errorMessage(task.getErrorMessage())
@@ -571,6 +579,22 @@ public class ReviewService {
     private String determineScope(ReviewRequestDTO request) {
         return ReviewTaskDescriptor.determineScope(request);
     }
+
+    private Long resolveCurrentUserId() {
+        try {
+            if (StpUtil.isLogin()) {
+                return StpUtil.getLoginIdAsLong();
+            }
+        } catch (Exception ignored) {
+            // Non-web callers such as tests and CI hooks may not have a Sa-Token context.
+        }
+        return null;
+    }
+
+    private String normalizeProjectKey(String projectKey) {
+        return projectKey != null && !projectKey.isBlank() ? projectKey.trim() : null;
+    }
+
     private void recordAudit(Long taskId, String eventType, String stage, String message, Map<String, Object> metadata) {
         if (taskId == null || auditService == null) {
             return;

@@ -22,6 +22,10 @@ public interface ReviewTaskRepository extends JpaRepository<ReviewTask, Long> {
      * 根据状态查询任务
      */
     List<ReviewTask> findByStatus(Integer status);
+
+    Page<ReviewTask> findBySessionId(Long sessionId, Pageable pageable);
+
+    Page<ReviewTask> findByProjectKey(String projectKey, Pageable pageable);
     
     /**
      * 根据审查类型查询任务

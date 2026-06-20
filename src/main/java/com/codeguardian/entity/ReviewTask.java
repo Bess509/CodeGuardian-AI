@@ -6,8 +6,12 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * 代码审查任务实体
@@ -23,6 +27,15 @@ public class ReviewTask {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "user_id")
+    private Long userId;
+
+    @Column(name = "session_id")
+    private Long sessionId;
+
+    @Column(name = "project_key")
+    private String projectKey;
     
     /**
      * 任务名称
@@ -59,6 +72,11 @@ public class ReviewTask {
      */
     @Column(columnDefinition = "TEXT")
     private String errorMessage;
+
+    @Builder.Default
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    private Map<String, Object> metadata = new LinkedHashMap<>();
     
     @PrePersist
     protected void onCreate() {
@@ -67,6 +85,9 @@ public class ReviewTask {
         }
         if (status == null) {
             status = TaskStatusEnum.PENDING.getValue();
+        }
+        if (metadata == null) {
+            metadata = new LinkedHashMap<>();
         }
     }
 }

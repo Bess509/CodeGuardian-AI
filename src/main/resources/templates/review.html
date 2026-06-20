@@ -6,7 +6,7 @@
     <title>代码审查 - CodeGuardian AI</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
-    <link rel="stylesheet" th:href="@{/css/review.css?v=2.4}">
+    <link rel="stylesheet" th:href="@{/css/review.css?v=2.5}">
 </head>
 <body>
     <div class="review-container">
@@ -232,6 +232,33 @@
                             <!-- 问题详情将在这里动态加载 -->
                         </div>
                     </div>
+                    <section class="session-assistant-section" id="sessionAssistantSection">
+                        <div class="session-assistant-header">
+                            <div class="session-title-group">
+                                <h2 class="session-title">项目会话</h2>
+                                <span class="session-project-key" id="sessionProjectKey">未绑定项目</span>
+                            </div>
+                            <button class="session-icon-btn" id="newSessionBtn" type="button" title="新建会话">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                        <div class="session-message-list" id="sessionMessageList">
+                            <div class="session-empty-state">选择或开始一次审查后，可以继续追问。</div>
+                        </div>
+                        <div class="session-input-row">
+                            <textarea id="sessionMessageInput" class="session-message-input" rows="2" placeholder="询问当前 task、选中问题或项目规则"></textarea>
+                            <button class="session-send-btn" id="sendSessionMessageBtn" type="button" title="发送">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                        <div class="session-actions-row">
+                            <button class="session-memory-btn" id="saveSessionMemoryBtn" type="button">
+                                <i class="fas fa-bookmark"></i>
+                                记住
+                            </button>
+                            <span class="session-status-text" id="sessionStatusText">正在准备会话</span>
+                        </div>
+                    </section>
                 </div>
             </div>
         </main>
@@ -287,6 +314,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-java.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
     <script th:src="@{/js/http.js?v=2.0}"></script>
-    <script th:src="@{/js/review.js?v=2.6}"></script>
+    <script th:src="@{/js/review.js?v=2.7}"></script>
 </body>
 </html>

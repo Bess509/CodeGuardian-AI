@@ -25,6 +25,10 @@ public class ReviewResponseDTO {
      * 任务名称
      */
     private String taskName;
+
+    private Long sessionId;
+
+    private String projectKey;
     
     /**
      * 任务状态

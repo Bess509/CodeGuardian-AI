@@ -330,6 +330,8 @@ public class ReviewController {
             return ReviewResponseDTO.builder()
                 .taskId(task.getId())
                 .taskName(ReviewTypeEnum.fromValue(task.getReviewType()) == ReviewTypeEnum.GIT && task.getScope() != null ? task.getScope() : task.getName())
+                .sessionId(task.getSessionId())
+                .projectKey(task.getProjectKey())
                 .status(taskStatus.name())
                 .statusLabel(taskStatus.getDesc())
                 .errorMessage(task.getErrorMessage())

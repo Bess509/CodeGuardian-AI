@@ -4,6 +4,11 @@ let currentTaskId = null;
 let currentFindings = [];
 let selectedFindingId = null;
 let currentTaskStatus = null;
+let currentSessionId = null;
+let currentProjectKey = null;
+let currentSessionBusy = false;
+let currentSessionPromise = null;
+let currentSessionPromiseKey = null;
 
 // 页面加载时初始化
 document.addEventListener('DOMContentLoaded', function() {
@@ -97,6 +102,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 初始化审查结果区域为空
     initResultsArea();
+    initSessionAssistant();
     
     // 初始化拖拽功能
     initDragAndDrop();
@@ -447,6 +453,296 @@ function resetTaskControls() {
     const retryBtn = document.getElementById('retryTaskBtn');
     if (cancelBtn) cancelBtn.disabled = true;
     if (retryBtn) retryBtn.disabled = true;
+}
+
+function initSessionAssistant() {
+    const sendBtn = document.getElementById('sendSessionMessageBtn');
+    const newSessionBtn = document.getElementById('newSessionBtn');
+    const memoryBtn = document.getElementById('saveSessionMemoryBtn');
+    const input = document.getElementById('sessionMessageInput');
+
+    if (sendBtn) {
+        sendBtn.addEventListener('click', sendSessionMessage);
+    }
+    if (newSessionBtn) {
+        newSessionBtn.addEventListener('click', () => createReviewSession(true));
+    }
+    if (memoryBtn) {
+        memoryBtn.addEventListener('click', saveSessionMemory);
+    }
+    if (input) {
+        input.addEventListener('keydown', event => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendSessionMessage();
+            }
+        });
+    }
+
+    updateSessionHeader();
+    setSessionStatus('正在准备会话');
+    ensureReviewSession(inferSessionProjectKey()).catch(error => {
+        console.warn('初始化项目会话失败:', error);
+        setSessionStatus('会话未就绪');
+    });
+}
+
+function inferSessionProjectKey(requestBody = null) {
+    const codeTypeSelect = document.getElementById('codeTypeSelect');
+    const reviewType = codeTypeSelect ? codeTypeSelect.value : 'snippet';
+    const body = requestBody || {};
+
+    if (body.gitUrl || (typeof gitConfig !== 'undefined' && gitConfig && gitConfig.url)) {
+        return normalizeSessionProjectKey(`git:${body.gitUrl || gitConfig.url}`);
+    }
+    if (body.projectPath || body.directoryPath || selectedDirectory) {
+        return normalizeSessionProjectKey(`path:${body.projectPath || body.directoryPath || selectedDirectory}`);
+    }
+    if (body.filePath || selectedFile) {
+        return normalizeSessionProjectKey(`file:${body.filePath || selectedFile.name}`);
+    }
+    if ((reviewType === 'directory' || reviewType === 'project') && directoryFiles && directoryFiles.length > 0) {
+        const firstPath = directoryFiles[0].webkitRelativePath || directoryFiles[0].name || 'uploaded';
+        const rootName = String(firstPath).split('/')[0] || 'uploaded';
+        return normalizeSessionProjectKey(`upload:${rootName}`);
+    }
+
+    const projectRootInput = document.getElementById('projectRootConfig');
+    if (projectRootInput && projectRootInput.value && projectRootInput.value.trim()) {
+        return normalizeSessionProjectKey(`workspace:${projectRootInput.value}`);
+    }
+    return 'review:ad-hoc';
+}
+
+function normalizeSessionProjectKey(value) {
+    const normalized = String(value || 'review:ad-hoc')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .replace(/[?#].*$/, '');
+    return normalized.length > 180 ? `${normalized.slice(0, 150)}:${hashSessionText(normalized)}` : normalized;
+}
+
+function hashSessionText(value) {
+    let hash = 0;
+    const text = String(value || '');
+    for (let i = 0; i < text.length; i++) {
+        hash = ((hash << 5) - hash) + text.charCodeAt(i);
+        hash |= 0;
+    }
+    return Math.abs(hash).toString(36);
+}
+
+function sessionTitleFor(projectKey) {
+    const key = String(projectKey || 'review:ad-hoc');
+    const label = key.length > 54 ? `${key.slice(0, 51)}...` : key;
+    return `审查会话 - ${label}`;
+}
+
+function updateSessionHeader() {
+    const projectKeyEl = document.getElementById('sessionProjectKey');
+    if (projectKeyEl) {
+        projectKeyEl.textContent = currentProjectKey || '未绑定项目';
+        projectKeyEl.title = currentProjectKey || '';
+    }
+}
+
+function setSessionStatus(text) {
+    const statusEl = document.getElementById('sessionStatusText');
+    if (statusEl) {
+        statusEl.textContent = text || '';
+        statusEl.title = text || '';
+    }
+}
+
+function setSessionBusy(isBusy) {
+    currentSessionBusy = isBusy;
+    const sendBtn = document.getElementById('sendSessionMessageBtn');
+    const memoryBtn = document.getElementById('saveSessionMemoryBtn');
+    const newSessionBtn = document.getElementById('newSessionBtn');
+    if (sendBtn) sendBtn.disabled = isBusy;
+    if (memoryBtn) memoryBtn.disabled = isBusy;
+    if (newSessionBtn) newSessionBtn.disabled = isBusy;
+}
+
+async function sessionFetchJson(url, options = {}) {
+    const response = await fetch(url, options);
+    const text = await response.text();
+    let data = null;
+    if (text) {
+        try {
+            data = JSON.parse(text);
+        } catch (error) {
+            data = text;
+        }
+    }
+    if (!response.ok) {
+        const message = data && typeof data === 'object' && data.message
+            ? data.message
+            : (typeof data === 'string' ? data : `HTTP ${response.status}`);
+        throw new Error(message);
+    }
+    return data;
+}
+
+function extractPageContent(page) {
+    return page && Array.isArray(page.content) ? page.content : [];
+}
+
+async function ensureReviewSession(projectKey = inferSessionProjectKey(), forceNew = false) {
+    const nextProjectKey = normalizeSessionProjectKey(projectKey);
+    if (!forceNew && currentSessionId && currentProjectKey === nextProjectKey) {
+        return currentSessionId;
+    }
+    if (currentSessionPromise) {
+        if (!forceNew && currentSessionPromiseKey === nextProjectKey) {
+            return currentSessionPromise;
+        }
+        await currentSessionPromise.catch(() => null);
+    }
+
+    currentSessionPromiseKey = nextProjectKey;
+    currentSessionPromise = createReviewSession(forceNew, nextProjectKey)
+        .finally(() => {
+            currentSessionPromise = null;
+            currentSessionPromiseKey = null;
+        });
+    return currentSessionPromise;
+}
+
+async function createReviewSession(forceNew = false, projectKey = inferSessionProjectKey()) {
+    const nextProjectKey = normalizeSessionProjectKey(projectKey);
+    setSessionBusy(true);
+    setSessionStatus('正在加载会话');
+    try {
+        let session = null;
+        if (!forceNew) {
+            const page = await sessionFetchJson(`/api/sessions?projectKey=${encodeURIComponent(nextProjectKey)}&page=0&size=1`);
+            const sessions = extractPageContent(page);
+            session = sessions.length > 0 ? sessions[0] : null;
+        }
+        if (!session) {
+            session = await sessionFetchJson('/api/sessions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    projectKey: nextProjectKey,
+                    title: sessionTitleFor(nextProjectKey)
+                })
+            });
+        }
+
+        currentSessionId = session.id;
+        currentProjectKey = session.projectKey || nextProjectKey;
+        updateSessionHeader();
+        await loadSessionMessages(currentSessionId);
+        setSessionStatus(`会话 #${currentSessionId}`);
+        return currentSessionId;
+    } catch (error) {
+        console.error('加载项目会话失败:', error);
+        setSessionStatus('会话加载失败');
+        throw error;
+    } finally {
+        setSessionBusy(false);
+    }
+}
+
+async function loadSessionMessages(sessionId) {
+    const messageList = document.getElementById('sessionMessageList');
+    if (!messageList || !sessionId) return;
+
+    const page = await sessionFetchJson(`/api/sessions/${sessionId}/messages?page=0&size=50`);
+    renderSessionMessages(extractPageContent(page));
+}
+
+function renderSessionMessages(messages) {
+    const messageList = document.getElementById('sessionMessageList');
+    if (!messageList) return;
+
+    if (!messages || messages.length === 0) {
+        messageList.innerHTML = '<div class="session-empty-state">选择或开始一次审查后，可以继续追问。</div>';
+        return;
+    }
+
+    messageList.innerHTML = messages.map(renderSessionMessage).join('');
+    messageList.scrollTop = messageList.scrollHeight;
+}
+
+function renderSessionMessage(message) {
+    const role = String(message && message.role ? message.role : 'ASSISTANT').toLowerCase();
+    const safeRole = role === 'user' ? 'user' : 'assistant';
+    const roleLabel = safeRole === 'user' ? '你' : '助手';
+    const taskMeta = message && message.taskId ? `Task #${escapeHtml(String(message.taskId))}` : '';
+    const findingMeta = message && message.findingId ? `Finding #${escapeHtml(String(message.findingId))}` : '';
+    const meta = [taskMeta, findingMeta].filter(Boolean).join(' / ');
+    return `
+        <div class="session-message ${safeRole}">
+            <div class="session-message-role">${roleLabel}${meta ? ` · ${meta}` : ''}</div>
+            <div class="session-message-bubble">${escapeHtml(message && message.content ? message.content : '')}</div>
+        </div>`;
+}
+
+async function sendSessionMessage() {
+    const input = document.getElementById('sessionMessageInput');
+    const content = input ? input.value.trim() : '';
+    if (!content) {
+        return;
+    }
+
+    try {
+        const sessionId = await ensureReviewSession(inferSessionProjectKey());
+        setSessionBusy(true);
+        setSessionStatus('正在发送');
+        if (input) input.value = '';
+        await sessionFetchJson(`/api/sessions/${sessionId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                content,
+                taskId: currentTaskId,
+                findingId: selectedFindingId
+            })
+        });
+        await loadSessionMessages(sessionId);
+        setSessionStatus(`会话 #${sessionId}`);
+    } catch (error) {
+        console.error('发送会话消息失败:', error);
+        setSessionStatus('发送失败');
+        alert('发送会话消息失败: ' + (error.message || '未知错误'));
+        if (input) input.value = content;
+    } finally {
+        setSessionBusy(false);
+    }
+}
+
+async function saveSessionMemory() {
+    const input = document.getElementById('sessionMessageInput');
+    const content = input ? input.value.trim() : '';
+    if (!content) {
+        alert('请先输入要记住的项目规则或背景');
+        return;
+    }
+
+    try {
+        const sessionId = await ensureReviewSession(inferSessionProjectKey());
+        setSessionBusy(true);
+        setSessionStatus('正在保存记忆');
+        await sessionFetchJson(`/api/sessions/${sessionId}/memories`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                content,
+                memoryType: 'PROJECT_MEMORY',
+                sourceId: currentTaskId ? String(currentTaskId) : null
+            })
+        });
+        setSessionStatus('项目记忆已保存');
+    } catch (error) {
+        console.error('保存项目记忆失败:', error);
+        setSessionStatus('保存记忆失败');
+        alert('保存项目记忆失败: ' + (error.message || '未知错误'));
+    } finally {
+        setSessionBusy(false);
+    }
 }
 
 function renderTaskControls(task) {
@@ -3073,6 +3369,16 @@ async function startReview() {
         requestBody.rulesOnly = rulesOnly;
         requestBody.agentMode = agentMode;
         requestBody.enableRag = !rulesOnly && (!ragEnhancementCheckbox || ragEnhancementCheckbox.checked);
+
+        const reviewProjectKey = inferSessionProjectKey(requestBody);
+        requestBody.projectKey = reviewProjectKey;
+        try {
+            requestBody.sessionId = await ensureReviewSession(reviewProjectKey);
+            requestBody.projectKey = currentProjectKey || reviewProjectKey;
+        } catch (sessionError) {
+            console.warn('审查任务未绑定会话:', sessionError);
+            setSessionStatus('会话未绑定');
+        }
         
         const response = await fetch(apiEndpoint, {
             method: 'POST',
@@ -3089,6 +3395,13 @@ async function startReview() {
         
         const result = await response.json();
         currentTaskId = result.taskId;
+        if (result.sessionId) {
+            currentSessionId = result.sessionId;
+        }
+        if (result.projectKey) {
+            currentProjectKey = result.projectKey;
+            updateSessionHeader();
+        }
         renderTaskControls(result);
         
         // 轮询任务状态

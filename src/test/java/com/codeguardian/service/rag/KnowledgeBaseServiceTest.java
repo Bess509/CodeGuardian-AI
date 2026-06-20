@@ -14,18 +14,23 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockMultipartFile;
 
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,6 +48,8 @@ public class KnowledgeBaseServiceTest {
     private MinioStorageService minioStorageService;
     @Mock
     private DocumentParsingService documentParsingService;
+    @Mock
+    private KnowledgeChunkRebuildService chunkRebuildService;
     @Mock
     private JdbcTemplate jdbcTemplate;
 
@@ -186,5 +193,58 @@ public class KnowledgeBaseServiceTest {
         String second = knowledgeBaseService.getCorpusFingerprint();
 
         assertNotEquals(first, second);
+    }
+
+    @Test
+    void uploadDocument_ShouldRebuildKnowledgeChunksAfterSavingDocument() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "code-style.pdf",
+                "application/pdf",
+                "CG-CODE-001 Use clear class names.".getBytes()
+        );
+        when(minioStorageService.uploadFile(file)).thenReturn("uploads/code-style.pdf");
+        when(minioStorageService.getBucketName()).thenReturn("code-review");
+        when(documentParsingService.parse(file)).thenReturn(ParsedKnowledgeDocument.builder()
+                .content("""
+                        # Code Style
+
+                        CG-CODE-001 Use clear class names.
+                        Class names should reveal responsibilities.
+                        """)
+                .parser("tika")
+                .parserStrategy("tika_fallback")
+                .metadata(Map.of("structured", false))
+                .build());
+        java.lang.reflect.Field documentsField = KnowledgeBaseService.class.getDeclaredField("documents");
+        documentsField.setAccessible(true);
+        documentsField.set(knowledgeBaseService, new ArrayList<>(knowledgeBaseService.getAllDocuments()));
+
+        knowledgeBaseService.uploadDocument(file);
+
+        verify(repository).save(argThat(document ->
+                "code-style.pdf".equals(document.getTitle())
+                        && document.getContent().contains("CG-CODE-001")
+                        && "uploads/code-style.pdf".equals(document.getMinioObjectName())));
+        verify(chunkRebuildService).rebuildDocumentChunks(argThat(document ->
+                "code-style.pdf".equals(document.getTitle())
+                        && document.getContent().contains("CG-CODE-001")));
+    }
+
+    @Test
+    void deleteDocument_ShouldDeletePersistedChunksForDocument() {
+        KnowledgeDocument uploaded = KnowledgeDocument.builder()
+                .id("uploaded-doc")
+                .title("Uploaded Rules")
+                .content("CG-CODE-001 Use clear names.")
+                .minioObjectName("uploads/rules.pdf")
+                .build();
+        when(repository.findById("uploaded-doc")).thenReturn(Optional.of(uploaded));
+
+        knowledgeBaseService.deleteDocument("uploaded-doc");
+
+        verify(minioStorageService).removeFile("uploads/rules.pdf");
+        verify(repository).deleteById("uploaded-doc");
+        verify(chunkRebuildService).deleteDocumentChunks("uploaded-doc");
     }
 }

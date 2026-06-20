@@ -46,6 +46,7 @@ public class KnowledgeBaseService {
     @org.springframework.context.annotation.Lazy
     private VectorStore vectorStore; // Injected (PGVector)
     private final KnowledgeDocumentRepository repository;
+    private final KnowledgeChunkRebuildService chunkRebuildService;
     private final MinioStorageService minioStorageService;
     private final DocumentParsingService documentParsingService;
     private final JdbcTemplate jdbcTemplate;
@@ -117,7 +118,8 @@ public class KnowledgeBaseService {
                 
                 log.info("Loaded {} documents from database.", dbDocs.size());
             }
-            this.documents = dbDocs;
+            this.documents = new ArrayList<>(dbDocs);
+            rebuildStaleChunks(dbDocs);
             
             // 2. 构建 BM25 索引
             buildIndices();
@@ -233,9 +235,11 @@ public class KnowledgeBaseService {
                 .metadata(uploadMetadata(file, objectName, parsed))
                 .build();
             
-            log.info("Saving document metadata to database and vector store...");
+            log.info("Saving document metadata, chunks and vector store entries...");
             // 保存并更新索引
-            saveDocument(doc);
+            saveDocument(doc, false);
+            chunkRebuildService.rebuildDocumentChunks(doc);
+            vectorOperations().vectorizeDocument(doc);
             log.info("Document saved successfully. ID: {}", id);
             
             // 重新构建 BM25
@@ -283,6 +287,7 @@ public class KnowledgeBaseService {
 
         // 2. Delete from DB
         repository.deleteById(id);
+        chunkRebuildService.deleteDocumentChunks(id);
 
         // 3. Update memory cache
         this.documents.removeIf(d -> d.getId().equals(id));
@@ -331,6 +336,23 @@ public class KnowledgeBaseService {
     private void buildIndices() {
         bm25Index.rebuild(documents);
         log.info("Built BM25 Index for {} documents", documents.size());
+    }
+
+    private void rebuildStaleChunks(List<KnowledgeDocument> dbDocs) {
+        if (dbDocs == null || dbDocs.isEmpty()) {
+            return;
+        }
+        for (KnowledgeDocument doc : dbDocs) {
+            try {
+                if (chunkRebuildService.chunksStale(doc)) {
+                    chunkRebuildService.rebuildDocumentChunks(doc);
+                    log.info("Rebuilt stale knowledge chunks for document: {}", doc.getId());
+                }
+            } catch (Exception e) {
+                log.warn("Failed to rebuild knowledge chunks for document {}: {}",
+                        doc != null ? doc.getId() : "unknown", e.getMessage());
+            }
+        }
     }
     
     /**
